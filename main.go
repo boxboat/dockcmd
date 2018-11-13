@@ -16,6 +16,8 @@ package main
 
 import "gitlab.com/boxboat/boxops/boxcmd/cmd"
 
+var Version = "undefined"
+
 func main() {
 	cmd.Execute()
 }
