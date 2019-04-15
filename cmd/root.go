@@ -1,4 +1,4 @@
-// Copyright © 2018 NAME HERE <EMAIL ADDRESS>
+// Copyright © 2018 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,32 +17,48 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
-	homedir "github.com/mitchellh/go-homedir"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var (
+	Logger  = log.New()
+	CfgFile string
+	debug   bool
+)
+
+// rootCmdPersistentPreRunE configures logging
+func rootCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
+	Logger.SetOutput(os.Stdout)
+	Logger.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
+	if debug {
+		Logger.SetLevel(log.DebugLevel)
+	} else {
+		Logger.SetLevel(log.WarnLevel)
+	}
+	Logger.Debugln("rootCmdPersistentPreRunE")
+	return nil
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "boxcmd",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+	Use:               "boxcmd",
+	Short:             "BoxOps Utilities",
+	Long:              `A collection of BoxOps utilities developed by BoxBoat to facilitate Ops`,
+	PersistentPreRunE: rootCmdPersistentPreRunE,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func Execute(version string) {
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -55,18 +71,21 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.boxcmd.yaml)")
+	rootCmd.PersistentFlags().StringVar(
+		&CfgFile,
+		"config",
+		"",
+		"config file (default is $HOME/.boxcmd.yaml)")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "debug output")
+	viper.BindPFlags(rootCmd.PersistentFlags())
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	if cfgFile != "" {
+	if CfgFile != "" {
 		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
+		viper.SetConfigFile(CfgFile)
 	} else {
 		// Find home directory.
 		home, err := homedir.Dir()
@@ -80,6 +99,9 @@ func initConfig() {
 		viper.SetConfigName(".boxcmd")
 	}
 
+	viper.SetEnvPrefix("boxcmd")
+	replacer := strings.NewReplacer("-", "_")
+	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.

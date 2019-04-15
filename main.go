@@ -1,4 +1,4 @@
-// Copyright © 2018 NAME HERE <EMAIL ADDRESS>
+// Copyright © 2018 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,5 +19,5 @@ import "gitlab.com/boxboat/boxops/boxcmd/cmd"
 var Version = "undefined"
 
 func main() {
-	cmd.Execute()
+	cmd.Execute(Version)
 }
