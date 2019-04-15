@@ -1,2 +1,4 @@
 /boxcmd
-
+/release
+.idea
+*.yaml
