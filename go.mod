@@ -7,6 +7,7 @@ require (
 	github.com/Masterminds/sprig v2.18.0+incompatible
 	github.com/alecthomas/gometalinter v3.0.0+incompatible // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
+	github.com/aws/aws-sdk-go v1.19.11
 	github.com/fatih/gomodifytags v0.0.0-20180914191908-141225bf62b6 // indirect
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf // indirect
