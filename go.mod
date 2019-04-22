@@ -1,4 +1,4 @@
-module gitlab.com/boxboat/boxops/boxcmd
+module gitlab.com/boxboat/boxops/dockcmd
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect

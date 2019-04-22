@@ -29,7 +29,7 @@ import (
 var (
 	// Logger for global use
 	Logger = log.New()
-	// CfgFile containing boxcmd config
+	// CfgFile containing dockcmd config
 	CfgFile string
 	debug   bool
 )
@@ -51,7 +51,7 @@ func rootCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:               "boxcmd",
+	Use:               "dockcmd",
 	Short:             "BoxOps Utilities",
 	Long:              `A collection of BoxOps utilities developed by BoxBoat to facilitate Ops`,
 	PersistentPreRunE: rootCmdPersistentPreRunE,
@@ -77,7 +77,7 @@ func init() {
 		&CfgFile,
 		"config",
 		"",
-		"config file (default is $HOME/.boxcmd.yaml)")
+		"config file (default is $HOME/.dockcmd.yaml)")
 
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "debug output")
 	viper.BindPFlags(rootCmd.PersistentFlags())
@@ -96,12 +96,12 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		// Search config in home directory with name ".boxcmd" (without extension).
+		// Search config in home directory with name ".dockcmd" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".boxcmd")
+		viper.SetConfigName(".dockcmd")
 	}
 
-	viper.SetEnvPrefix("boxcmd")
+	viper.SetEnvPrefix("dockcmd")
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv() // read in environment variables that match

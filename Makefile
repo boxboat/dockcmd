@@ -4,7 +4,7 @@ PKGS := $(shell go list ./... | grep -v /vendor)
 test:
 	CGO_ENABLED=0 go test $(PKGS)
 
-BINARY := boxcmd
+BINARY := dockcmd
 VERSION ?= $(shell git describe --always --long --dirty)
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
