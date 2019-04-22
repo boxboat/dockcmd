@@ -4,7 +4,7 @@ properties([
 ])
 
 def version = ""
-def golang_image = 'golang:1.12-alpine3.8'
+def golang_image = 'golang:1.12-alpine3.9'
 def gcs_store = 'gs://boxops/dockcmd/releases'
 def releaseBranch = 'master'
 def currentBranch = env.BRANCH_NAME
