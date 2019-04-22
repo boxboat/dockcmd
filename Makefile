@@ -6,6 +6,7 @@ test:
 
 BINARY := dockcmd
 VERSION ?= $(shell git describe --always --long --dirty)
+DEBUG ?= false
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
 
@@ -17,7 +18,7 @@ local:
 .PHONY: $(PLATFORMS)
 $(PLATFORMS):
 	mkdir -p release/$(os)-amd64
-	GOOS=$(os) GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION)" -o release/$(os)-amd64/$(BINARY)
+	GOOS=$(os) GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X gitlab.com/boxboat/boxops/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/$(os)-amd64/$(BINARY)
 	tar -zcf release/$(os)-amd64/$(BINARY)-$(os)-amd64-$(VERSION).tgz -C release/$(os)-amd64/ $(BINARY)
 
 .PHONY: release
