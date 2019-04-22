@@ -4,8 +4,8 @@ properties([
 ])
 
 def version = ""
-def golang_image = 'golang:1.11-alpine3.8'
-def gcs_store = 'gs://boxops/boxcmd/releases'
+def golang_image = 'golang:1.12-alpine3.8'
+def gcs_store = 'gs://boxops/dockcmd/releases'
 def releaseBranch = 'master'
 def currentBranch = env.BRANCH_NAME
 def release = false
@@ -27,9 +27,9 @@ throttle(['docker']) {
 
       stage('Build') {
         sh """
-          docker container run -t -v "${env.WORKSPACE}:/boxcmd" ${golang_image} \
+          docker container run -t -v "${env.WORKSPACE}:/dockcmd" ${golang_image} \
           sh -c "apk --no-cache add git make tar gzip && \
-          cd /boxcmd && \
+          cd /dockcmd && \
           make test && \
           ${version} make release"
         """

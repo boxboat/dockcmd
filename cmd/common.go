@@ -57,7 +57,7 @@ func AddEditInPlaceSupport(cmd *cobra.Command, p *bool) {
 		"Enable edit in place, edit input file(s) in place")
 }
 
-// AddInputFileSupport will add the standard boxcmd input file option
+// AddInputFileSupport will add the standard dockcmd input file option
 // and store the user input in the provided string variable.
 func AddInputFileSupport(cmd *cobra.Command, p *string) {
 	cmd.Flags().StringVarP(
@@ -68,7 +68,7 @@ func AddInputFileSupport(cmd *cobra.Command, p *string) {
 		"Input file or stdin")
 }
 
-// AddOutputFileSupport will add the standard boxcmd output file option
+// AddOutputFileSupport will add the standard dockcmd output file option
 // and store the user input in the provided string variable.
 func AddOutputFileSupport(cmd *cobra.Command, p *string) {
 	cmd.Flags().StringVarP(

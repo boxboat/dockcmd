@@ -14,7 +14,7 @@
 
 package main
 
-import "gitlab.com/boxboat/boxops/boxcmd/cmd"
+import "gitlab.com/boxboat/boxops/dockcmd/cmd"
 
 var Version = "undefined"
 
