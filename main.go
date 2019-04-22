@@ -16,6 +16,7 @@ package main
 
 import "gitlab.com/boxboat/boxops/dockcmd/cmd"
 
+// Version of dockcmd defined by Makefile.
 var Version = "undefined"
 
 func main() {

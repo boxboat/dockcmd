@@ -27,6 +27,8 @@ import (
 )
 
 var (
+	// EnableDebug compile flag.
+	EnableDebug = "true"
 	// Logger for global use
 	Logger = log.New()
 	// CfgFile containing dockcmd config
@@ -79,7 +81,10 @@ func init() {
 		"",
 		"config file (default is $HOME/.dockcmd.yaml)")
 
-	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "debug output")
+	if EnableDebug == "true" {
+		rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "debug output")
+	}
+
 	viper.BindPFlags(rootCmd.PersistentFlags())
 }
 

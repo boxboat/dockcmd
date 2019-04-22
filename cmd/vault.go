@@ -141,8 +141,8 @@ Example input and output:
 foo:
   keyA: {{ (vault "secret/foo" "a") | squote }}
   keyB: {{ (vault "secret/foo" "b") | squote }}
-  bar:
-    keyC: {{ (vault (printf "%s/%s/%s" "secret/foo" .Deployment "bar") "c") | squote }}
+  charlie:
+    keyC: {{ (vault (printf "%s/%s/%s" "secret/foo" .Deployment "charlie") "c") | squote }}
 keyD: {{ (vault "secret/root" "d") | quote }}
 
 
@@ -151,8 +151,8 @@ keyD: {{ (vault "secret/root" "d") | quote }}
 foo:
   keyA: '<value-of-secret/foo-a-from-vault>'
   keyB: '<value-of-secret/foo-b-from-vault>'
-  bar:
-    keyC: '<value-of-secret/foo/{{.Deployment}}/bar-c-from-vault>'
+  charlie:
+    keyC: '<value-of-secret/foo/{{.Deployment}}/charlie-c-from-vault>'
 keyD: "<value-of-secret/root-d-from-vault>"
 ...
 `,

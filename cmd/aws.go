@@ -63,7 +63,9 @@ func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 
 func getAwsSession() *session.Session {
 	if awsSession == nil {
-		awsSession = session.New()
+		var err error
+		awsSession, err = session.NewSession()
+		HandleError(err)
 	}
 	return awsSession
 }
@@ -200,8 +202,8 @@ Example input and output:
 foo:
   keyA: {{ (aws "foo" "a") | squote }}
   keyB: {{ (aws "foo" "b") | squote }}
-  bar:
-    keyC: {{ (aws "foo-bar" "c") | squote }}
+  charlie:
+    keyC: {{ (aws "foo-charlie" "c") | squote }}
 keyD: {{ (aws "root" "d") | quote }}
 
 
@@ -210,8 +212,8 @@ keyD: {{ (aws "root" "d") | quote }}
 foo:
   keyA: '<value-of-secret/foo-a-from-aws-secrets-manager>'
   keyB: '<value-of-secret/foo-b-from-aws-secrets-manager>'
-  bar:
-    keyC: '<value-of-secret/foo/bar-c-from-aws-secrets-manager>'
+  charlie:
+    keyC: '<value-of-secret/foo-charlie-c-from-aws-secrets-manager>'
 keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 ...
 `,
