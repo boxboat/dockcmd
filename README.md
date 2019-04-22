@@ -1,6 +1,6 @@
 # dockcmd
 
-`dockcmd` is a tool providing a collection of [BoxOps](boxops.io) utility functions. Which can be used standalone or to accelerate CI/CD with BoxBoat's [dockhand](https://github.com/boxboat/dockhand).
+`dockcmd` is a tool providing a collection of [BoxOps](https://boxops.io) utility functions. Which can be used standalone or to accelerate CI/CD with BoxBoat's [dockhand](https://github.com/boxboat/dockhand).
 
 ## `aws`
 
