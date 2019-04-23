@@ -7,8 +7,8 @@
 AWS utilities are under the `aws` sub-command. For authentication, AWS commands make use of the standard AWS credentials providers and will check in order:
 
 * Access Key/Secret key
-  * Environment: `${AWS_ACCESS_KEY}` `${AWS_SECRET_KEY}`
-  * Args: `--aws-access-key <access-key>` `--aws-secret-key <secret-key>`
+  * Environment: `${AWS_ACCESS_KEY_ID}` `${AWS_SECRET_ACCESS_KEY}`
+  * Args: `--access-key-id <access-key>` `--secret-access-key <secret-key>`
 * AWS Profile: `~/.aws/config` and `~/.aws/credentials`
   * Environment: `${AWS_PROFILE}`
   * Args: `--profile <profile-name>`  
