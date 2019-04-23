@@ -34,8 +34,8 @@ import (
 var (
 	awsRegion               string
 	awsProfile              string
-	awsAccessKey            string
-	awsSecretKey            string
+	awsAccessKeyID          string
+	awsSecretAccessKey      string
 	awsUseChainCredentials  bool
 	awsSession              *session.Session
 	awsSecretsManagerClient *secretsmanager.SecretsManager
@@ -56,7 +56,7 @@ func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 				},
 			})
 	} else {
-		creds = credentials.NewStaticCredentials(awsAccessKey, awsSecretKey, "")
+		creds = credentials.NewStaticCredentials(awsAccessKeyID, awsSecretAccessKey, "")
 	}
 	return creds
 }
@@ -164,12 +164,12 @@ func awsCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	awsRegion = viper.GetString("region")
 	Logger.Debugf("Using AWS Region: {%s}", awsRegion)
 	if awsRegion == "" {
-		return errors.New("${AWS_REGION} must be set or passed in via --region")
+		return errors.New("${AWS_DEFAULT_REGION} must be set or passed in via --region")
 	}
-	awsAccessKey = viper.GetString("access-key")
-	awsSecretKey = viper.GetString("secret-key")
+	awsAccessKeyID = viper.GetString("access-key-id")
+	awsSecretAccessKey = viper.GetString("secret-access-key")
 
-	if awsAccessKey == "" && awsSecretKey == "" {
+	if awsAccessKeyID == "" && awsSecretAccessKey == "" {
 		awsUseChainCredentials = true
 	}
 
@@ -249,22 +249,22 @@ func init() {
 		"region",
 		"",
 		"",
-		"AWS Region")
-	viper.BindEnv("region", "AWS_REGION")
+		"AWS Region can alternatively be set using ${AWS_DEFAULT_REGION}")
+	viper.BindEnv("region", "AWS_DEFAULT_REGION")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&awsAccessKey,
-		"aws-access-key",
+		&awsAccessKeyID,
+		"access-key-id",
 		"",
 		"",
-		"AWS Access Key can alternatively be set using ${AWS_ACCESS_KEY}")
+		"AWS Access Key ID can alternatively be set using ${AWS_ACCESS_KEY_ID}")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&awsSecretKey,
-		"aws-secret-key",
+		&awsSecretAccessKey,
+		"secret-access-key",
 		"",
 		"",
-		"AWS Secret Key can alternatively be set using ${AWS_SECRET_KEY}")
+		"AWS Secret Access Key can alternatively be set using ${AWS_SECRET_ACCESS_KEY}")
 
 	awsCmd.PersistentFlags().StringVarP(
 		&awsProfile,
@@ -273,8 +273,8 @@ func init() {
 		"",
 		"AWS Profile can alternatively be set using ${AWS_PROFILE}")
 
-	viper.BindEnv("access-key", "AWS_ACCESS_KEY")
-	viper.BindEnv("secret-key", "AWS_SECRET_KEY")
+	viper.BindEnv("access-key-id", "AWS_ACCESS_KEY_ID")
+	viper.BindEnv("secret-access-key", "AWS_SECRET_ACCESS_KEY")
 	viper.BindEnv("profile", "AWS_PROFILE")
 	viper.BindPFlags(awsCmd.PersistentFlags())
 
