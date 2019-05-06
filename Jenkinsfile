@@ -39,7 +39,7 @@ throttle(['docker']) {
         if (release) {
           googleStorageUpload(
             bucket: gcs_store,
-            credentialsId: 'boxboat-prod-gcp',
+            credentialsId: 'boxboat-gcp',
             pathPrefix: 'release/',
             pattern: 'release/**/*.tgz',
             sharedPublicly: true)
