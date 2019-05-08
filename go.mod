@@ -1,4 +1,4 @@
-module gitlab.com/boxboat/boxops/dockcmd
+module github.com/boxboat/dockcmd
 
 require (
 	github.com/Masterminds/goutils v1.1.0 // indirect

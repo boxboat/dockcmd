@@ -5,7 +5,18 @@ test:
 	CGO_ENABLED=0 go test $(PKGS)
 
 BINARY := dockcmd
-VERSION ?= $(shell git describe --always --long --dirty)
+VERSION := develop
+
+# for travis-ci builds
+ifdef TRAVIS_BRANCH
+VERSION := $(TRAVIS_BRANCH)
+endif
+
+# for tagged travis-ci builds
+ifdef TRAVIS_TAG
+VERSION := $(TRAVIS_TAG)
+endif
+
 DEBUG ?= false
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
@@ -17,9 +28,8 @@ local:
 
 .PHONY: $(PLATFORMS)
 $(PLATFORMS):
-	mkdir -p release/$(os)-amd64
-	GOOS=$(os) GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X gitlab.com/boxboat/boxops/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/$(os)-amd64/$(BINARY)
-	tar -zcf release/$(os)-amd64/$(BINARY)-$(os)-amd64-$(VERSION).tgz -C release/$(os)-amd64/ $(BINARY)
+	mkdir -p release/$(os)-amd64/$(VERSION)
+	GOOS=$(os) GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/$(os)-amd64/$(VERSION)/$(BINARY)
 
 .PHONY: release
 release: windows linux darwin
