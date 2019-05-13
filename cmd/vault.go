@@ -35,7 +35,7 @@ var (
 	vaultToken       string
 	vaultRoleID      string
 	vaultSecretID    string
-	vaultSecretCache map[string]map[string]string
+	vaultSecretCache map[string]map[string]interface{}
 )
 
 func getVaultClient() *api.Client {
@@ -72,9 +72,9 @@ func getVaultClient() *api.Client {
 
 func getVaultSecret(path string, key string) string {
 
-	if val, ok := vaultSecretCache[path][key]; ok {
+	if val, ok := vaultSecretCache[path]; ok {
 		Logger.Debugf("Using cached [%s][%s]", path, key)
-		return val
+		return val[key].(string)
 	}
 
 	Logger.Debugf("Reading secret[%s] key[%s]", path, key)
@@ -82,9 +82,9 @@ func getVaultSecret(path string, key string) string {
 	HandleError(err)
 
 	if vaultSecretCache[path] == nil {
-		vaultSecretCache[path] = make(map[string]string)
+		vaultSecretCache[path] = make(map[string]interface{})
 	}
-	vaultSecretCache[path][key] = secret.Data[key].(string)
+	vaultSecretCache[path] = secret.Data
 
 	return secret.Data[key].(string)
 }
@@ -225,5 +225,5 @@ func init() {
 	AddInputFileSupport(vaultGetSecretsCmd, &commonGetSecretsInputFile)
 	AddOutputFileSupport(vaultGetSecretsCmd, &commonGetSecretsOutputFile)
 
-	vaultSecretCache = make(map[string]map[string]string)
+	vaultSecretCache = make(map[string]map[string]interface{})
 }

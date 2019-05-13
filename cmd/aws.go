@@ -39,7 +39,7 @@ var (
 	awsUseChainCredentials  bool
 	awsSession              *session.Session
 	awsSecretsManagerClient *secretsmanager.SecretsManager
-	awsSecretCache          map[string]map[string]string
+	awsSecretCache          map[string]map[string]interface{}
 )
 
 func getAwsCredentials(sess *session.Session) *credentials.Credentials {
@@ -83,9 +83,9 @@ func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
 func getAwsSecret(secretName string, secretKey string) string {
 
 	Logger.Debugf("Retrieving %s", secretName)
-	if val, ok := awsSecretCache[secretName][secretKey]; ok {
+	if val, ok := awsSecretCache[secretName]; ok {
 		Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		return val
+		return val[secretKey].(string)
 	}
 	//Create a Secrets Manager client
 	svc := getAwsSecretsManagerClient()
@@ -148,9 +148,9 @@ func getAwsSecret(secretName string, secretKey string) string {
 	json.Unmarshal([]byte(secretString), &response)
 
 	if awsSecretCache[secretName] == nil {
-		awsSecretCache[secretName] = make(map[string]string)
+		awsSecretCache[secretName] = make(map[string]interface{})
 	}
-	awsSecretCache[secretName][secretKey] = response[secretKey].(string)
+	awsSecretCache[secretName] = response
 	return response[secretKey].(string)
 
 }
@@ -285,5 +285,5 @@ func init() {
 	AddInputFileSupport(awsGetSecretsCmd, &commonGetSecretsInputFile)
 	AddOutputFileSupport(awsGetSecretsCmd, &commonGetSecretsOutputFile)
 
-	awsSecretCache = make(map[string]map[string]string)
+	awsSecretCache = make(map[string]map[string]interface{})
 }
