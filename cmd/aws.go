@@ -85,7 +85,15 @@ func getAwsSecret(secretName string, secretKey string) string {
 	Logger.Debugf("Retrieving %s", secretName)
 	if val, ok := awsSecretCache[secretName]; ok {
 		Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		return val[secretKey].(string)
+		secretStr, ok := val[secretKey].(string)
+		if !ok {
+			HandleError(
+				fmt.Errorf(
+					"Could not convert [%s][%s] to string",
+					secretName,
+					secretKey))
+		}
+		return secretStr
 	}
 	//Create a Secrets Manager client
 	svc := getAwsSecretsManagerClient()
@@ -150,8 +158,16 @@ func getAwsSecret(secretName string, secretKey string) string {
 	if awsSecretCache[secretName] == nil {
 		awsSecretCache[secretName] = make(map[string]interface{})
 	}
+	secretStr, ok := response[secretKey].(string)
+	if !ok {
+		HandleError(
+			fmt.Errorf(
+				"Could not convert secrets manager response[%s][%s] to string",
+				secretName,
+				secretKey))
+	}
 	awsSecretCache[secretName] = response
-	return response[secretKey].(string)
+	return secretStr
 
 }
 

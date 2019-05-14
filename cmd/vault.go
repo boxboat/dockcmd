@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"text/template"
 
 	"github.com/hashicorp/vault/api"
@@ -74,7 +75,15 @@ func getVaultSecret(path string, key string) string {
 
 	if val, ok := vaultSecretCache[path]; ok {
 		Logger.Debugf("Using cached [%s][%s]", path, key)
-		return val[key].(string)
+		secretStr, ok := val[key].(string)
+		if !ok {
+			HandleError(
+				fmt.Errorf(
+					"Could not convert [%s][%s] to string",
+					path,
+					key))
+		}
+		return secretStr
 	}
 
 	Logger.Debugf("Reading secret[%s] key[%s]", path, key)
@@ -84,9 +93,16 @@ func getVaultSecret(path string, key string) string {
 	if vaultSecretCache[path] == nil {
 		vaultSecretCache[path] = make(map[string]interface{})
 	}
+	secretStr, ok := secret.Data[key].(string)
+	if !ok {
+		HandleError(
+			fmt.Errorf(
+				"Could not convert vault response [%s][%s] to string",
+				path,
+				key))
+	}
 	vaultSecretCache[path] = secret.Data
-
-	return secret.Data[key].(string)
+	return secretStr
 }
 
 // vaultCmdPersistentPreRunE checks required persistent tokens for vaultCmd
