@@ -39,7 +39,7 @@ var (
 	awsUseChainCredentials  bool
 	awsSession              *session.Session
 	awsSecretsManagerClient *secretsmanager.SecretsManager
-	awsSecretCache          map[string]map[string]string
+	awsSecretCache          map[string]map[string]interface{}
 )
 
 func getAwsCredentials(sess *session.Session) *credentials.Credentials {
@@ -83,9 +83,17 @@ func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
 func getAwsSecret(secretName string, secretKey string) string {
 
 	Logger.Debugf("Retrieving %s", secretName)
-	if val, ok := awsSecretCache[secretName][secretKey]; ok {
+	if val, ok := awsSecretCache[secretName]; ok {
 		Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		return val
+		secretStr, ok := val[secretKey].(string)
+		if !ok {
+			HandleError(
+				fmt.Errorf(
+					"Could not convert [%s][%s] to string",
+					secretName,
+					secretKey))
+		}
+		return secretStr
 	}
 	//Create a Secrets Manager client
 	svc := getAwsSecretsManagerClient()
@@ -148,10 +156,18 @@ func getAwsSecret(secretName string, secretKey string) string {
 	json.Unmarshal([]byte(secretString), &response)
 
 	if awsSecretCache[secretName] == nil {
-		awsSecretCache[secretName] = make(map[string]string)
+		awsSecretCache[secretName] = make(map[string]interface{})
 	}
-	awsSecretCache[secretName][secretKey] = response[secretKey].(string)
-	return response[secretKey].(string)
+	secretStr, ok := response[secretKey].(string)
+	if !ok {
+		HandleError(
+			fmt.Errorf(
+				"Could not convert secrets manager response[%s][%s] to string",
+				secretName,
+				secretKey))
+	}
+	awsSecretCache[secretName] = response
+	return secretStr
 
 }
 
@@ -285,5 +301,5 @@ func init() {
 	AddInputFileSupport(awsGetSecretsCmd, &commonGetSecretsInputFile)
 	AddOutputFileSupport(awsGetSecretsCmd, &commonGetSecretsOutputFile)
 
-	awsSecretCache = make(map[string]map[string]string)
+	awsSecretCache = make(map[string]map[string]interface{})
 }
