@@ -39,11 +39,27 @@ var (
 	awsUseChainCredentials  bool
 	awsSession              *session.Session
 	awsSecretsManagerClient *secretsmanager.SecretsManager
-	awsSecretCache          map[string]map[string]string
+	awsSecretCache          map[string]map[string]interface{}
 )
 
+// SessionProvider custom provider to allow for fallback to session configured credentials.
+type SessionProvider struct {
+	Session *session.Session
+}
+
+// Retrieve for SessionProvider.
+func (m *SessionProvider) Retrieve() (credentials.Value, error) {
+	return m.Session.Config.Credentials.Get()
+}
+
+// IsExpired for SessionProvider.
+func (m *SessionProvider) IsExpired() bool {
+	return m.Session.Config.Credentials.IsExpired()
+}
+
 func getAwsCredentials(sess *session.Session) *credentials.Credentials {
-	var creds *credentials.Credentials
+
+	var creds *credentials.Credentials = sess.Config.Credentials
 	if awsUseChainCredentials {
 		creds = credentials.NewChainCredentials(
 			[]credentials.Provider{
@@ -53,6 +69,9 @@ func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 				},
 				&ec2rolecreds.EC2RoleProvider{
 					Client: ec2metadata.New(sess),
+				},
+				&SessionProvider{
+					Session: sess,
 				},
 			})
 	} else {
@@ -64,7 +83,9 @@ func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 func getAwsSession() *session.Session {
 	if awsSession == nil {
 		var err error
-		awsSession, err = session.NewSession()
+		awsSession, err = session.NewSessionWithOptions(session.Options{
+			SharedConfigState: session.SharedConfigEnable,
+		})
 		HandleError(err)
 	}
 	return awsSession
@@ -83,9 +104,17 @@ func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
 func getAwsSecret(secretName string, secretKey string) string {
 
 	Logger.Debugf("Retrieving %s", secretName)
-	if val, ok := awsSecretCache[secretName][secretKey]; ok {
+	if val, ok := awsSecretCache[secretName]; ok {
 		Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		return val
+		secretStr, ok := val[secretKey].(string)
+		if !ok {
+			HandleError(
+				fmt.Errorf(
+					"Could not convert [%s][%s] to string",
+					secretName,
+					secretKey))
+		}
+		return secretStr
 	}
 	//Create a Secrets Manager client
 	svc := getAwsSecretsManagerClient()
@@ -148,10 +177,18 @@ func getAwsSecret(secretName string, secretKey string) string {
 	json.Unmarshal([]byte(secretString), &response)
 
 	if awsSecretCache[secretName] == nil {
-		awsSecretCache[secretName] = make(map[string]string)
+		awsSecretCache[secretName] = make(map[string]interface{})
 	}
-	awsSecretCache[secretName][secretKey] = response[secretKey].(string)
-	return response[secretKey].(string)
+	secretStr, ok := response[secretKey].(string)
+	if !ok {
+		HandleError(
+			fmt.Errorf(
+				"Could not convert secrets manager response[%s][%s] to string",
+				secretName,
+				secretKey))
+	}
+	awsSecretCache[secretName] = response
+	return secretStr
 
 }
 
@@ -285,5 +322,5 @@ func init() {
 	AddInputFileSupport(awsGetSecretsCmd, &commonGetSecretsInputFile)
 	AddOutputFileSupport(awsGetSecretsCmd, &commonGetSecretsOutputFile)
 
-	awsSecretCache = make(map[string]map[string]string)
+	awsSecretCache = make(map[string]map[string]interface{})
 }
