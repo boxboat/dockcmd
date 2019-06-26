@@ -8,6 +8,7 @@ branches:
   only:
     - develop
     - master
+    - /^\d+\.\d+(\.\d+)?(-\S*)?$/
 
 notifications:
 email: false
