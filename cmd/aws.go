@@ -42,8 +42,24 @@ var (
 	awsSecretCache          map[string]map[string]interface{}
 )
 
+// SessionProvider custom provider to allow for fallback to session configured credentials.
+type SessionProvider struct {
+	Session *session.Session
+}
+
+// Retrieve for SessionProvider.
+func (m *SessionProvider) Retrieve() (credentials.Value, error) {
+	return m.Session.Config.Credentials.Get()
+}
+
+// IsExpired for SessionProvider.
+func (m *SessionProvider) IsExpired() bool {
+	return m.Session.Config.Credentials.IsExpired()
+}
+
 func getAwsCredentials(sess *session.Session) *credentials.Credentials {
-	var creds *credentials.Credentials
+
+	var creds *credentials.Credentials = sess.Config.Credentials
 	if awsUseChainCredentials {
 		creds = credentials.NewChainCredentials(
 			[]credentials.Provider{
@@ -53,6 +69,9 @@ func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 				},
 				&ec2rolecreds.EC2RoleProvider{
 					Client: ec2metadata.New(sess),
+				},
+				&SessionProvider{
+					Session: sess,
 				},
 			})
 	} else {
@@ -64,7 +83,9 @@ func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 func getAwsSession() *session.Session {
 	if awsSession == nil {
 		var err error
-		awsSession, err = session.NewSession()
+		awsSession, err = session.NewSessionWithOptions(session.Options{
+			SharedConfigState: session.SharedConfigEnable,
+		})
 		HandleError(err)
 	}
 	return awsSession
