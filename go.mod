@@ -12,6 +12,8 @@ require (
 	github.com/Masterminds/sprig v2.20.0+incompatible
 
 	github.com/aws/aws-sdk-go v1.21.8
+	github.com/elastic/go-elasticsearch/v6 v6.8.5
+	github.com/elastic/go-elasticsearch/v7 v7.5.0
 
 	github.com/google/uuid v1.1.1 // indirect
 
