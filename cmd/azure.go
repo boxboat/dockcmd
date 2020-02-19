@@ -34,15 +34,24 @@ var (
 	azureKeyVaultName   string
 	azureKeyVaultClient keyvault.BaseClient
 	azureSecretCache    map[string]map[string]interface{}
+	azureUseAzCliLogin  = false
 )
 
 func getKeyVaultClient() keyvault.BaseClient {
 	if !initialized {
-		authorizer, err := kvauth.NewAuthorizerFromEnvironment()
-		HandleError(err)
-		azureKeyVaultClient = keyvault.New()
-		azureKeyVaultClient.Authorizer = authorizer
-		initialized = true
+		if azureUseAzCliLogin {
+			authorizer, err := kvauth.NewAuthorizerFromCLI()
+			HandleError(err)
+			azureKeyVaultClient = keyvault.New()
+			azureKeyVaultClient.Authorizer = authorizer
+			initialized = true
+		} else {
+			authorizer, err := kvauth.NewAuthorizerFromEnvironment()
+			HandleError(err)
+			azureKeyVaultClient = keyvault.New()
+			azureKeyVaultClient.Authorizer = authorizer
+			initialized = true
+		}
 	}
 	return azureKeyVaultClient
 }
@@ -112,11 +121,15 @@ func azureCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	azureClientID = viper.GetString("client-id")
 	azureClientSecret = viper.GetString("client-secret")
 
-	// ensure required environment variables are set
-	os.Setenv("AZURE_TENANT_ID", azureTenantID)
-	os.Setenv("AZURE_CLIENT_ID", azureClientID)
-	os.Setenv("AZURE_CLIENT_SECRET", azureClientSecret)
-
+	if (azureTenantID == "" && azureClientID == "" && azureClientSecret == "") || azureUseAzCliLogin {
+		// set to true in case where no service principal credentials provided
+		azureUseAzCliLogin = true
+	} else {
+		// ensure required environment variables are set
+		os.Setenv("AZURE_TENANT_ID", azureTenantID)
+		os.Setenv("AZURE_CLIENT_ID", azureClientID)
+		os.Setenv("AZURE_CLIENT_SECRET", azureClientSecret)
+	}
 	return nil
 }
 
@@ -189,6 +202,11 @@ func init() {
 
 	// azure command and common persistent flags
 	azureCmd.AddCommand(azureGetSecretsCmd)
+	azureCmd.PersistentFlags().BoolVarP(
+		&azureUseAzCliLogin, "az-cli-login",
+		"",
+		false,
+		"access credentials provided by az login - default if tenant, client-id and client-secret are not set")
 	azureCmd.PersistentFlags().StringVarP(
 		&azureTenantID,
 		"tenant",
