@@ -58,6 +58,8 @@ Azure utilities are under the `azure` sub-command. For authentication, Azure com
   * Environment: `${AZURE_TENANT_ID}`
   * Args: `--tenant <tenant-id>`
 
+Alternatively the [azure cli](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) can be used to authenticate in the current shell with `az login`.
+
 See `dockcmd azure --help` for more details on `azure` flags.
 
 ### `get-secrets`
