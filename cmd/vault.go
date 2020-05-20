@@ -72,7 +72,6 @@ func getVaultClient() *api.Client {
 }
 
 func getVaultSecret(path string, key string) string {
-
 	if val, ok := vaultSecretCache[path]; ok {
 		Logger.Debugf("Using cached [%s][%s]", path, key)
 		secretStr, ok := val[key].(string)
@@ -87,21 +86,43 @@ func getVaultSecret(path string, key string) string {
 	}
 
 	Logger.Debugf("Reading secret[%s] key[%s]", path, key)
-	secret, err := getVaultClient().Logical().Read(path)
-	HandleError(err)
 
 	if vaultSecretCache[path] == nil {
 		vaultSecretCache[path] = make(map[string]interface{})
 	}
-	secretStr, ok := secret.Data[key].(string)
-	if !ok {
-		HandleError(
-			fmt.Errorf(
-				"Could not convert vault response [%s][%s] to string",
-				path,
-				key))
+
+	// make empty query for ReadWithData (always retrieve latest secret from v2 kv store)
+	query := make(map[string][] string)
+
+	secretStr := ""
+	ok := false
+	secret, err := getVaultClient().Logical().ReadWithData(path, query)
+	HandleError(err)
+	if secret != nil && secret.Data["data"] != nil{
+		secretStr, ok = secret.Data["data"].(map[string]interface{})[key].(string)
+		if !ok {
+			HandleError(
+				fmt.Errorf(
+					"Could not convert vault response [%s][%s] to string",
+					path,
+					key))
+		}
+		vaultSecretCache[path] = secret.Data["data"].(map[string]interface{})
+	} else {
+		secret, err = getVaultClient().Logical().Read(path)
+		HandleError(err)
+		if secret != nil {
+			secretStr, ok = secret.Data[key].(string)
+		}
+		if !ok {
+			HandleError(
+				fmt.Errorf(
+					"Could not convert vault response [%s][%s] to string",
+					path,
+					key))
+		}
+		vaultSecretCache[path] = secret.Data
 	}
-	vaultSecretCache[path] = secret.Data
 	return secretStr
 }
 
