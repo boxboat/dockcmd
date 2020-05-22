@@ -129,8 +129,7 @@ See `dockcmd vault --help` for more details on `vault` flags.
 
 ### `get-secrets`
 
-Retrieve secrets from Vault. Input files are defined using go templating and `dockcmd` supports sprig functions, as well as alternate template delimiters `<< >>` using `--use-alt-delims`
-
+Retrieve secrets from Vault `v1` or `v2` KV Secrets Engines. Input files are defined using go templating and `dockcmd` supports sprig functions, as well as alternate template delimiters `<< >>` using `--use-alt-delims`.
 
 `dockcmd vault get-secrets --vault-addr https://vault --set TargetEnv=prod --input-file secret-values.yaml`
 
