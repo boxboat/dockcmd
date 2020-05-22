@@ -2,7 +2,7 @@ language: go
 sudo: required
 dist: trusty
 go:
-  - 1.12
+  - 1.14
 
 branches:
   only:
