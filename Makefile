@@ -18,7 +18,7 @@ VERSION := $(TRAVIS_TAG)
 endif
 
 DEBUG ?= false
-PLATFORMS := windows linux darwin
+PLATFORMS := linux darwin
 os = $(word 1, $@)
 
 .DEFAULT_GOAL := local
@@ -30,6 +30,10 @@ local:
 $(PLATFORMS):
 	mkdir -p release/$(os)-amd64/$(VERSION)
 	GOOS=$(os) GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/$(os)-amd64/$(VERSION)/$(BINARY)
+
+windows:
+	mkdir -p release/windows-amd64/$(VERSION)
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/windows-amd64/$(VERSION)/$(BINARY).exe
 
 .PHONY: release
 release: windows linux darwin
