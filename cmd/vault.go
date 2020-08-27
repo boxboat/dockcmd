@@ -220,7 +220,9 @@ keyD: "<value-of-secret/root-d-from-vault>"
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		Logger.Debug("PreRunE")
-		return ReadValuesMap()
+		HandleError(ReadValuesFiles())
+		HandleError(ReadSetValues())
+		return nil
 	},
 	Args: cobra.MinimumNArgs(0),
 }
@@ -263,7 +265,8 @@ func init() {
 	viper.BindEnv("vault-secret-id", "VAULT_SECRET_ID")
 	viper.BindPFlags(vaultCmd.PersistentFlags())
 
-	AddValuesArraySupport(vaultGetSecretsCmd, &commonValues)
+	AddSetValuesSupport(vaultGetSecretsCmd, &commonValues)
+	AddValuesFileSupport(vaultGetSecretsCmd, &commonValuesFiles)
 	AddUseAlternateDelimitersSupport(vaultGetSecretsCmd, &commonUseAlternateDelims)
 	AddEditInPlaceSupport(vaultGetSecretsCmd, &commonEditInPlace)
 
