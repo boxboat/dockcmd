@@ -272,7 +272,9 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		Logger.Debug("PreRunE")
-		return ReadValuesMap()
+		HandleError(ReadValuesFiles())
+		HandleError(ReadSetValues())
+		return nil
 	},
 }
 
@@ -315,7 +317,8 @@ func init() {
 	viper.BindEnv("profile", "AWS_PROFILE")
 	viper.BindPFlags(awsCmd.PersistentFlags())
 
-	AddValuesArraySupport(awsGetSecretsCmd, &commonValues)
+	AddSetValuesSupport(awsGetSecretsCmd, &commonValues)
+	AddValuesFileSupport(awsGetSecretsCmd, &commonValuesFiles)
 	AddUseAlternateDelimitersSupport(awsGetSecretsCmd, &commonUseAlternateDelims)
 	AddEditInPlaceSupport(awsGetSecretsCmd, &commonEditInPlace)
 

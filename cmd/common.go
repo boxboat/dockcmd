@@ -19,11 +19,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sigs.k8s.io/yaml"
 	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
 	"github.com/spf13/cobra"
+	"helm.sh/helm/v3/pkg/strvals"
 )
 
 const (
@@ -43,7 +45,8 @@ var (
 	commonUseAlternateDelims   bool
 	commonEditInPlace          bool
 	commonValues               []string
-	commonValuesMap            map[string]interface{}
+	commonValuesFiles          []string
+	commonValuesMap            = map[string]interface{}{}
 )
 
 // AddEditInPlaceSupport will add the standard edit in place option and store
@@ -90,14 +93,24 @@ func AddUseAlternateDelimitersSupport(cmd *cobra.Command, p *bool) {
 		"Enable '<< >>' delimiters for go template processing")
 }
 
-// AddValuesArraySupport will add the standard values array and store in the
+// AddSetValuesSupport will add the standard values array and store in the
 // provided string array variable.
-func AddValuesArraySupport(cmd *cobra.Command, p *[]string) {
+func AddSetValuesSupport(cmd *cobra.Command, p *[]string) {
 	cmd.Flags().StringArrayVar(
 		p,
 		"set",
 		[]string{},
 		"set key=value (can specify multiple times to set multiple values)")
+}
+
+// AddValuesFileSupport will add the standard values file array and store in the
+// provided string array variable.
+func AddValuesFileSupport(cmd *cobra.Command, p *[]string) {
+	cmd.Flags().StringArrayVar(
+		p,
+		"values",
+		[]string{},
+		"values file.yaml (can specify multiple times to set multiple values)")
 }
 
 // CommonGetSecrets process get-secrets request.
@@ -133,18 +146,27 @@ func CommonGetSecrets(files []string, funcMap template.FuncMap) {
 	}
 }
 
-// ReadValuesMap will add all of the values passed in with --set and store the
+// ReadSetValues will add all of the values passed in with --set and store the
 // values in commonValuesMap.
-func ReadValuesMap() error {
-	Logger.Debugf("Read provided values")
-	commonValuesMap = make(map[string]interface{})
-	for _, s := range commonValues {
-		kv := strings.Split(s, "=")
-		if len(kv) == 2 {
-			commonValuesMap[kv[0]] = kv[1]
-		} else {
-			return fmt.Errorf("unable to parse %s", s)
-		}
+func ReadSetValues() error {
+	Logger.Debugf("ReadSetValues")
+	for _, v := range commonValues {
+		Logger.Debugf("parsing [%s]", v)
+		err := strvals.ParseInto(v, commonValuesMap)
+		HandleError(err)
+	}
+	return nil
+}
+
+func ReadValuesFiles() error {
+	Logger.Debugf("ReadValuesFiles")
+	for _, f := range commonValuesFiles {
+		currentValues := map[string]interface{}{}
+		bytes,err := readFile(f)
+		HandleError(err)
+		err = yaml.Unmarshal(bytes, &currentValues)
+		HandleError(err)
+		commonValuesMap = mergeMaps(commonValuesMap, currentValues)
 	}
 	return nil
 }
@@ -162,10 +184,10 @@ func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
 	}
 
 	tpl := template.Must(
-		template.New("secret-template").
+		template.New("template").
 			Funcs(sprig.TxtFuncMap()).
 			Funcs(funcMap).
-			Option("missingkey=error").
+			Option("missingkey=default").
 			Delims(leftDelim, rightDelim).
 			Parse(string(data)))
 
@@ -207,4 +229,28 @@ func HandleError(err error) {
 		Logger.Errorf("%s", err)
 		os.Exit(1)
 	}
+}
+
+// mergeMaps merges values of provided maps and returns a merged copy. Merges right to left.
+func mergeMaps(left map[string]interface{}, right map[string]interface{}) map[string]interface{} {
+	final := make(map[string]interface{}, len(left))
+	for k, v := range left {
+		final[k] = v
+	}
+	for k, v := range right {
+		if v, ok := v.(map[string]interface{}); ok {
+			if bv, ok := final[k]; ok {
+				if bv, ok := bv.(map[string]interface{}); ok {
+					final[k] = mergeMaps(bv, v)
+					continue
+				}
+			}
+		}
+		final[k] = v
+	}
+	return final
+}
+
+func readFile(filename string) ([]byte, error) {
+	return ioutil.ReadFile(filename)
 }

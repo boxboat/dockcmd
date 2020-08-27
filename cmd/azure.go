@@ -193,7 +193,9 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		Logger.Debug("PreRunE")
-		return ReadValuesMap()
+		HandleError(ReadValuesFiles())
+		HandleError(ReadSetValues())
+		return nil
 	},
 }
 
@@ -240,7 +242,8 @@ func init() {
 		"",
 		"",
 		"Azure Key Vault Name")
-	AddValuesArraySupport(azureGetSecretsCmd, &commonValues)
+	AddSetValuesSupport(azureGetSecretsCmd, &commonValues)
+	AddValuesFileSupport(azureGetSecretsCmd, &commonValuesFiles)
 	AddUseAlternateDelimitersSupport(azureGetSecretsCmd, &commonUseAlternateDelims)
 	AddEditInPlaceSupport(azureGetSecretsCmd, &commonEditInPlace)
 
