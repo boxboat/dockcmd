@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"sigs.k8s.io/yaml"
 	"strings"
 	"text/template"
+
+	"sigs.k8s.io/yaml"
 
 	"github.com/Masterminds/sprig"
 	"github.com/spf13/cobra"
@@ -162,13 +163,27 @@ func ReadValuesFiles() error {
 	Logger.Debugf("ReadValuesFiles")
 	for _, f := range commonValuesFiles {
 		currentValues := map[string]interface{}{}
-		bytes,err := readFile(f)
+		bytes, err := readFile(f)
 		HandleError(err)
 		err = yaml.Unmarshal(bytes, &currentValues)
 		HandleError(err)
 		commonValuesMap = mergeMaps(commonValuesMap, currentValues)
 	}
 	return nil
+}
+
+// Copied from https://github.com/helm/helm/blob/master/pkg/engine/funcs.go#L83
+// toYAML takes an interface, marshals it to yaml, and returns a string. It will
+// always return a string, even on marshal error (empty string).
+//
+// This is designed to be called from a template.
+func toYAML(v interface{}) string {
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		// Swallow errors inside of a template.
+		return ""
+	}
+	return strings.TrimSuffix(string(data), "\n")
 }
 
 // ParseSecretsTemplate uses the provided funcMap to parse secrets.
@@ -183,9 +198,14 @@ func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
 		rightDelim = AltRightDelim
 	}
 
+	extraFuncMap := template.FuncMap{
+		"toYaml": toYAML,
+	}
+
 	tpl := template.Must(
 		template.New("template").
 			Funcs(sprig.TxtFuncMap()).
+			Funcs(extraFuncMap).
 			Funcs(funcMap).
 			Option("missingkey=default").
 			Delims(leftDelim, rightDelim).
