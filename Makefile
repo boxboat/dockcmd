@@ -17,6 +17,10 @@ ifdef TRAVIS_TAG
 VERSION := $(TRAVIS_TAG)
 endif
 
+ifdef CI_VERSION
+VERSION := $(CI_VERSION)
+endif
+
 DEBUG ?= false
 PLATFORMS := linux darwin
 os = $(word 1, $@)
