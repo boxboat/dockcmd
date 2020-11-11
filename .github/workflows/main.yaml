@@ -55,5 +55,8 @@ jobs:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
 
-      - run: gcloud info
+      - name: Publish
+        run: |
+          cd ./release;
+          gsutil -m -q cp -r -a public-read . gs://boxops/dockcmd/releases/;
 
