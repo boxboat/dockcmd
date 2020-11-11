@@ -16,9 +16,6 @@ jobs:
         run: go version
 
       - name: Compute Version
-        if: |
-          github.event_name == 'push'
-            && startsWith(github.event.ref, 'refs/tags/v')
         id: version
         run: |
           tag=${GITHUB_REF#refs/tags/}
