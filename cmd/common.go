@@ -24,7 +24,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/Masterminds/sprig"
+	"github.com/Masterminds/sprig/v3"
 	"github.com/spf13/cobra"
 	"helm.sh/helm/v3/pkg/strvals"
 )
