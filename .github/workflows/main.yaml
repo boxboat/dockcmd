@@ -46,7 +46,7 @@ jobs:
       - name: Build
         run: make
         env:
-          CI_VERSION: ${{ steps.version.outputs.VERSION }}
+          CI_VERSION: ${{ steps.version.outputs.CI_VERSION }}
 
       - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
         with:
