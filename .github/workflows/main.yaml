@@ -44,9 +44,15 @@ jobs:
           fi
 
       - name: Build
-        run: make release
+        run: |
+          if [[ ${PUBLISH} = "yes" ]]; then
+            make release
+          else
+            make
+          fi
         env:
           CI_VERSION: ${{ steps.version.outputs.CI_VERSION }}
+          PUBLISH: ${{ steps.version.outputs.PUBLISH }}
 
       - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
         if: ${{ steps.version.outputs.PUBLISH == 'yes' }}
