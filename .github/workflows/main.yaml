@@ -48,17 +48,16 @@ jobs:
         env:
           CI_VERSION: ${{ steps.version.outputs.CI_VERSION }}
 
-      - name: Publish
-        uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
         if: ${{ steps.version.outputs.PUBLISH == "yes" }}
         with:
           version: '290.0.1'
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
+
+      - name: Publish
+        if: ${{ steps.version.outputs.PUBLISH == "yes" }}
         run: |
           cd ./release;
-          gsutil -m -q cp -r -a public-read . gs://boxops/dockcmd/releases/;
-
-
-
+          gsutil -m -q cp -r -a public-read . gs://boxops/dockcmd/releases/
