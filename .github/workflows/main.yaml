@@ -38,6 +38,12 @@ jobs:
             fi
           fi
 
+          pr=${GITHUB_REF#refs/pull/}
+          if [[ -z "${version}" && "${pr}" != "${GITHUB_REF}" ]]; then
+            pr=$(echo "${pr}" | sed -e 's/[^a-zA-Z0-9\-\.]/-/g')
+            version=${pr}
+          fi
+
           if [ -z "${version}" ]; then
             echo "Version could not be determined" >&2
             exit 1
