@@ -20,6 +20,7 @@ jobs:
       - name: Compute Version
         id: version
         run: |
+          echo ${GITHUB_REF}
           tag=${GITHUB_REF#refs/tags/}
           publish="no"
           if [ "${tag}" != "${GITHUB_REF}" ]; then
