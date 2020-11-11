@@ -1,5 +1,5 @@
 # dockcmd
-[![Build Status](https://travis-ci.org/boxboat/dockcmd.svg?branch=master)](https://travis-ci.org/boxboat/dockcmd)
+![Main](https://github.com/boxboat/dockcmd/workflows/Main/badge.svg?branch=master)
 
 `dockcmd` is a tool providing a collection of [BoxOps](https://boxops.io) utility functions. Which can be used standalone or to accelerate CI/CD with BoxBoat's [dockhand](https://github.com/boxboat/dockhand).
 
