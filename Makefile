@@ -27,7 +27,7 @@ os = $(word 1, $@)
 
 .DEFAULT_GOAL := local
 
-local:
+local: test
 	go build
 
 .PHONY: $(PLATFORMS)
@@ -40,7 +40,7 @@ windows:
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/windows-amd64/$(VERSION)/$(BINARY).exe
 
 .PHONY: release
-release: windows linux darwin
+release: test windows linux darwin
 
 clean:
 	rm -rf release/*
