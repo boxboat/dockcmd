@@ -1,5 +1,5 @@
 # dockcmd
-[![Build Status](https://travis-ci.org/boxboat/dockcmd.svg?branch=master)](https://travis-ci.org/boxboat/dockcmd)
+![Main](https://github.com/boxboat/dockcmd/workflows/Main/badge.svg?branch=master)
 
 `dockcmd` is a tool providing a collection of [BoxOps](https://boxops.io) utility functions. Which can be used standalone or to accelerate CI/CD with BoxBoat's [dockhand](https://github.com/boxboat/dockhand).
 
@@ -22,7 +22,7 @@ See `dockcmd aws --help` for more details on `aws` flags.
 
 ### `get-secrets`
 
-Retrieve secrets stored as JSON from AWS Secrets Manager. Input files are defined using go templating and `dockcmd` supports sprig functions and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
+Retrieve secrets stored as JSON from AWS Secrets Manager. Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
 
 `dockcmd aws get-secrets --region us-east-1 --set TargetEnv=prod --input-file secret-values.yaml`
 
@@ -64,7 +64,7 @@ See `dockcmd azure --help` for more details on `azure` flags.
 
 ### `get-secrets`
 
-Retrieve secrets stored as JSON from Azure Key Vaults. Input files are defined using go templating and `dockcmd` supports sprig functions and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
+Retrieve secrets stored as JSON from Azure Key Vaults. Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
 
 Secrets can be stored in Azure Key Vault either as plain text or as a json payload. See example below:
 
@@ -121,9 +121,9 @@ See `dockcmd es delete-indices --help` for more details
 
 ***
 ## `gotpl`
-`dockcmd gotpl` mirrors the capabilities in each of the `get-secrets` commands but does not connect to a secrets backend. Essentially this command is a go template processor that supports sprig functions and the Helm `toYaml` function with `helm` like value passing.
+`dockcmd gotpl` mirrors the capabilities in each of the `get-secrets` commands but does not connect to a secrets backend. Essentially this command is a go template processor that supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function with `helm` like value passing.
 
-Input files are defined using go templating and `dockcmd` supports sprig functions and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
+Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
 ***
 ## `vault`
 
@@ -137,7 +137,7 @@ See `dockcmd vault --help` for more details on `vault` flags.
 
 ### `get-secrets`
 
-Retrieve secrets from Vault `v1` or `v2` KV Secrets Engines. Input files are defined using go templating and `dockcmd` supports sprig functions and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
+Retrieve secrets from Vault `v1` or `v2` KV Secrets Engines. Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
 
 `dockcmd vault get-secrets --vault-addr https://vault --set TargetEnv=prod --input-file secret-values.yaml`
 

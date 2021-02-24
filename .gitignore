@@ -1,5 +1,5 @@
 dockcmd
 /release
 .idea
-*.yaml
+/local-test
 *.json
