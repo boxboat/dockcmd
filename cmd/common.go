@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strings"
 	"text/template"
@@ -186,6 +187,23 @@ func toYAML(v interface{}) string {
 	return strings.TrimSuffix(string(data), "\n")
 }
 
+// urlDecode URL Decodes a string
+// This is designed to be called from a template.
+func urlDecode(s string) string {
+	d, err := url.QueryUnescape(s)
+	if err != nil {
+		// Swallow errors inside of a template and return original string.
+		return s
+	}
+	return d
+}
+
+// urlEncode URL Encodes a string
+// This is designed to be called from a template.
+func urlEncode(s string) string {
+	return url.QueryEscape(s)
+}
+
 // ParseSecretsTemplate uses the provided funcMap to parse secrets.
 func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
 	Logger.Debugf("Parsing Template:\n%s", string(data))
@@ -199,7 +217,9 @@ func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
 	}
 
 	extraFuncMap := template.FuncMap{
-		"toYaml": toYAML,
+		"toYaml":    toYAML,
+		"urlEncode": urlEncode,
+		"urlDecode": urlDecode,
 	}
 
 	tpl := template.Must(
