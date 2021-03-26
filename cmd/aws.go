@@ -15,199 +15,31 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/boxboat/dockcmd/cmd/aws"
+	"github.com/boxboat/dockcmd/cmd/common"
 	"text/template"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-var (
-	awsRegion               string
-	awsProfile              string
-	awsAccessKeyID          string
-	awsSecretAccessKey      string
-	awsUseChainCredentials  bool
-	awsSession              *session.Session
-	awsSecretsManagerClient *secretsmanager.SecretsManager
-	awsSecretCache          map[string]map[string]interface{}
-)
-
-// SessionProvider custom provider to allow for fallback to session configured credentials.
-type SessionProvider struct {
-	Session *session.Session
-}
-
-// Retrieve for SessionProvider.
-func (m *SessionProvider) Retrieve() (credentials.Value, error) {
-	return m.Session.Config.Credentials.Get()
-}
-
-// IsExpired for SessionProvider.
-func (m *SessionProvider) IsExpired() bool {
-	return m.Session.Config.Credentials.IsExpired()
-}
-
-func getAwsCredentials(sess *session.Session) *credentials.Credentials {
-
-	var creds *credentials.Credentials = sess.Config.Credentials
-	if awsUseChainCredentials {
-		creds = credentials.NewChainCredentials(
-			[]credentials.Provider{
-				&credentials.EnvProvider{},
-				&credentials.SharedCredentialsProvider{
-					Profile: awsProfile,
-				},
-				&ec2rolecreds.EC2RoleProvider{
-					Client: ec2metadata.New(sess),
-				},
-				&SessionProvider{
-					Session: sess,
-				},
-			})
-	} else {
-		creds = credentials.NewStaticCredentials(awsAccessKeyID, awsSecretAccessKey, "")
-	}
-	return creds
-}
-
-func getAwsSession() *session.Session {
-	if awsSession == nil {
-		var err error
-		awsSession, err = session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable,
-		})
-		HandleError(err)
-	}
-	return awsSession
-}
-
-func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
-	if awsSecretsManagerClient == nil {
-		awsSecretsManagerClient = secretsmanager.New(
-			getAwsSession(),
-			aws.NewConfig().WithRegion(awsRegion).WithCredentials(
-				getAwsCredentials(getAwsSession())))
-	}
-	return awsSecretsManagerClient
-}
-
-func getAwsSecret(secretName string, secretKey string) string {
-
-	Logger.Debugf("Retrieving %s", secretName)
-	if val, ok := awsSecretCache[secretName]; ok {
-		Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		secretStr, ok := val[secretKey].(string)
-		if !ok {
-			HandleError(
-				fmt.Errorf(
-					"Could not convert [%s][%s] to string",
-					secretName,
-					secretKey))
-		}
-		return secretStr
-	}
-	//Create a Secrets Manager client
-	svc := getAwsSecretsManagerClient()
-	input := &secretsmanager.GetSecretValueInput{
-		SecretId:     aws.String(secretName),
-		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
-	}
-
-	Logger.Debugf("Retrieving [%s] from AWS Secrets Manager", secretName)
-	result, err := svc.GetSecretValue(input)
-
-	if err != nil {
-		var errorMessage string
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case secretsmanager.ErrCodeDecryptionFailure:
-				// Secrets Manager can't decrypt the protected secret text using the provided KMS key.
-				errorMessage = fmt.Sprintln(secretsmanager.ErrCodeDecryptionFailure, aerr.Error())
-				break
-
-			case secretsmanager.ErrCodeInternalServiceError:
-				// An error occurred on the server side.
-				errorMessage = fmt.Sprintln(secretsmanager.ErrCodeInternalServiceError, aerr.Error())
-				break
-
-			case secretsmanager.ErrCodeInvalidParameterException:
-				// You provided an invalid value for a parameter.
-				errorMessage = fmt.Sprintln(secretsmanager.ErrCodeInvalidParameterException, aerr.Error())
-				break
-
-			case secretsmanager.ErrCodeInvalidRequestException:
-				// You provided a parameter value that is not valid for the current state of the resource.
-				errorMessage = fmt.Sprintln(secretsmanager.ErrCodeInvalidRequestException, aerr.Error())
-				break
-
-			case secretsmanager.ErrCodeResourceNotFoundException:
-				// We can't find the resource that you asked for.
-				errorMessage = fmt.Sprintln(secretsmanager.ErrCodeResourceNotFoundException, aerr.Error())
-				break
-
-			default:
-				errorMessage = fmt.Sprintln(aerr.Error())
-				break
-			}
-		} else {
-			errorMessage = fmt.Sprintln(err.Error())
-		}
-		HandleError(errors.New(errorMessage))
-	}
-
-	// Decrypts secret using the associated KMS CMK.
-	// Depending on whether the secret is a string or binary, one of these fields will be populated.
-	var secretString string
-	if result.SecretString != nil {
-		secretString = *result.SecretString
-	}
-
-	Logger.Debugf("Secret %s:%s", secretName, secretString)
-	var response map[string]interface{}
-	json.Unmarshal([]byte(secretString), &response)
-
-	if awsSecretCache[secretName] == nil {
-		awsSecretCache[secretName] = make(map[string]interface{})
-	}
-	secretStr, ok := response[secretKey].(string)
-	if !ok {
-		HandleError(
-			fmt.Errorf(
-				"Could not convert secrets manager response[%s][%s] to string",
-				secretName,
-				secretKey))
-	}
-	awsSecretCache[secretName] = response
-	return secretStr
-
-}
 
 // awsRegionCmdPersistentPreRunE checks required persistent tokens for awsCmd
 func awsCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	if err := rootCmdPersistentPreRunE(cmd, args); err != nil {
 		return err
 	}
-	Logger.Debugln("awsCmdPersistentPreRunE")
-	awsRegion = viper.GetString("region")
-	Logger.Debugf("Using AWS Region: {%s}", awsRegion)
-	if awsRegion == "" {
+	common.Logger.Debugln("awsCmdPersistentPreRunE")
+	aws.Region = viper.GetString("region")
+	common.Logger.Debugf("Using AWS Region: {%s}", aws.Region)
+	if aws.Region == "" {
 		return errors.New("${AWS_DEFAULT_REGION} must be set or passed in via --region")
 	}
-	awsAccessKeyID = viper.GetString("access-key-id")
-	awsSecretAccessKey = viper.GetString("secret-access-key")
+	aws.AccessKeyID = viper.GetString("access-key-id")
+	aws.SecretAccessKey = viper.GetString("secret-access-key")
 
-	if awsAccessKeyID == "" && awsSecretAccessKey == "" {
-		awsUseChainCredentials = true
+	if aws.AccessKeyID == "" && aws.SecretAccessKey == "" {
+		aws.UseChainCredentials = true
 	}
 
 	return nil
@@ -255,11 +87,11 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 ...
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		Logger.Debug("get-secrets called")
+		common.Logger.Debug("get-secrets called")
 
 		// create custom function map
 		funcMap := template.FuncMap{
-			"aws": getAwsSecret,
+			"aws": aws.GetAwsSecret,
 		}
 
 		var files []string
@@ -267,13 +99,13 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 			files = args
 		}
 
-		CommonGetSecrets(files, funcMap)
+		common.CommonGetSecrets(files, funcMap)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		Logger.Debug("PreRunE")
-		HandleError(ReadValuesFiles())
-		HandleError(ReadSetValues())
+		common.Logger.Debug("PreRunE")
+		common.HandleError(common.ReadValuesFiles())
+		common.HandleError(common.ReadSetValues())
 		return nil
 	},
 }
@@ -284,46 +116,46 @@ func init() {
 	// aws command and common persistent flags
 	awsCmd.AddCommand(awsGetSecretsCmd)
 	awsCmd.PersistentFlags().StringVarP(
-		&awsRegion,
+		&aws.Region,
 		"region",
 		"",
 		"",
 		"AWS Region can alternatively be set using ${AWS_DEFAULT_REGION}")
-	viper.BindEnv("region", "AWS_DEFAULT_REGION")
+	_ = viper.BindEnv("region", "AWS_DEFAULT_REGION")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&awsAccessKeyID,
+		&aws.AccessKeyID,
 		"access-key-id",
 		"",
 		"",
 		"AWS Access Key ID can alternatively be set using ${AWS_ACCESS_KEY_ID}")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&awsSecretAccessKey,
+		&aws.SecretAccessKey,
 		"secret-access-key",
 		"",
 		"",
 		"AWS Secret Access Key can alternatively be set using ${AWS_SECRET_ACCESS_KEY}")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&awsProfile,
+		&aws.Profile,
 		"profile",
 		"",
 		"",
 		"AWS Profile can alternatively be set using ${AWS_PROFILE}")
 
-	viper.BindEnv("access-key-id", "AWS_ACCESS_KEY_ID")
-	viper.BindEnv("secret-access-key", "AWS_SECRET_ACCESS_KEY")
-	viper.BindEnv("profile", "AWS_PROFILE")
-	viper.BindPFlags(awsCmd.PersistentFlags())
+	_ = viper.BindEnv("access-key-id", "AWS_ACCESS_KEY_ID")
+	_ = viper.BindEnv("secret-access-key", "AWS_SECRET_ACCESS_KEY")
+	_ = viper.BindEnv("profile", "AWS_PROFILE")
+	_ = viper.BindPFlags(awsCmd.PersistentFlags())
 
-	AddSetValuesSupport(awsGetSecretsCmd, &commonValues)
-	AddValuesFileSupport(awsGetSecretsCmd, &commonValuesFiles)
-	AddUseAlternateDelimitersSupport(awsGetSecretsCmd, &commonUseAlternateDelims)
-	AddEditInPlaceSupport(awsGetSecretsCmd, &commonEditInPlace)
+	common.AddSetValuesSupport(awsGetSecretsCmd, &common.Values)
+	common.AddValuesFileSupport(awsGetSecretsCmd, &common.ValuesFiles)
+	common.AddUseAlternateDelimitersSupport(awsGetSecretsCmd, &common.UseAlternateDelims)
+	common.AddEditInPlaceSupport(awsGetSecretsCmd, &common.EditInPlace)
 
-	AddInputFileSupport(awsGetSecretsCmd, &commonGetSecretsInputFile)
-	AddOutputFileSupport(awsGetSecretsCmd, &commonGetSecretsOutputFile)
+	common.AddInputFileSupport(awsGetSecretsCmd, &common.GetSecretsInputFile)
+	common.AddOutputFileSupport(awsGetSecretsCmd, &common.GetSecretsOutputFile)
 
-	awsSecretCache = make(map[string]map[string]interface{})
+	aws.SecretCache = make(map[string]map[string]interface{})
 }

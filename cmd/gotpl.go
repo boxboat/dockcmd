@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/spf13/cobra"
 	"text/template"
 )
@@ -43,7 +44,7 @@ foo:
 ...
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		Logger.Debug("gotpl called")
+		common.Logger.Debug("gotpl called")
 
 		// create custom function map
 		funcMap := template.FuncMap{}
@@ -53,13 +54,13 @@ foo:
 			files = args
 		}
 
-		CommonGetSecrets(files, funcMap)
+		common.CommonGetSecrets(files, funcMap)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		Logger.Debug("PreRunE")
-		HandleError(ReadValuesFiles())
-		HandleError(ReadSetValues())
+		common.Logger.Debug("PreRunE")
+		common.HandleError(common.ReadValuesFiles())
+		common.HandleError(common.ReadSetValues())
 		return nil
 	},
 }
@@ -68,12 +69,12 @@ func init() {
 	rootCmd.AddCommand(gotplCmd)
 
 	// gotpl command and common persistent flags
-	AddSetValuesSupport(gotplCmd, &commonValues)
-	AddValuesFileSupport(gotplCmd, &commonValuesFiles)
-	AddUseAlternateDelimitersSupport(gotplCmd, &commonUseAlternateDelims)
-	AddEditInPlaceSupport(gotplCmd, &commonEditInPlace)
+	common.AddSetValuesSupport(gotplCmd, &common.Values)
+	common.AddValuesFileSupport(gotplCmd, &common.ValuesFiles)
+	common.AddUseAlternateDelimitersSupport(gotplCmd, &common.UseAlternateDelims)
+	common.AddEditInPlaceSupport(gotplCmd, &common.EditInPlace)
 
-	AddInputFileSupport(gotplCmd, &commonGetSecretsInputFile)
-	AddOutputFileSupport(gotplCmd, &commonGetSecretsOutputFile)
+	common.AddInputFileSupport(gotplCmd, &common.GetSecretsInputFile)
+	common.AddOutputFileSupport(gotplCmd, &common.GetSecretsOutputFile)
 
 }

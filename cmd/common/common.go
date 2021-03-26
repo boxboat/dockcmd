@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cmd
+package common
 
 import (
 	"bytes"
@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/Masterminds/sprig/v3"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"helm.sh/helm/v3/pkg/strvals"
 )
@@ -42,13 +43,15 @@ const (
 )
 
 var (
-	commonGetSecretsInputFile  string
-	commonGetSecretsOutputFile string
-	commonUseAlternateDelims   bool
-	commonEditInPlace          bool
-	commonValues               []string
-	commonValuesFiles          []string
-	commonValuesMap            = map[string]interface{}{}
+	// Logger for global use
+	Logger               = log.New()
+	GetSecretsInputFile  string
+	GetSecretsOutputFile string
+	UseAlternateDelims   bool
+	EditInPlace          bool
+	Values               []string
+	ValuesFiles          []string
+	ValuesMap            = map[string]interface{}{}
 )
 
 // AddEditInPlaceSupport will add the standard edit in place option and store
@@ -127,7 +130,7 @@ func CommonGetSecrets(files []string, funcMap template.FuncMap) {
 			data, err = ReadFileOrStdin(file)
 			HandleError(err)
 			output := ParseSecretsTemplate(data, funcMap)
-			if commonEditInPlace {
+			if EditInPlace {
 				err = WriteFileOrStdout(output, file)
 			} else {
 				err = WriteFileOrStdout(output, "")
@@ -136,25 +139,25 @@ func CommonGetSecrets(files []string, funcMap template.FuncMap) {
 		}
 
 	} else {
-		data, err = ReadFileOrStdin(commonGetSecretsInputFile)
+		data, err = ReadFileOrStdin(GetSecretsInputFile)
 		HandleError(err)
 		output := ParseSecretsTemplate(data, funcMap)
-		if commonEditInPlace {
-			err = WriteFileOrStdout(output, commonGetSecretsInputFile)
+		if EditInPlace {
+			err = WriteFileOrStdout(output, GetSecretsInputFile)
 		} else {
-			err = WriteFileOrStdout(output, commonGetSecretsOutputFile)
+			err = WriteFileOrStdout(output, GetSecretsOutputFile)
 		}
 		HandleError(err)
 	}
 }
 
 // ReadSetValues will add all of the values passed in with --set and store the
-// values in commonValuesMap.
+// values in ValuesMap.
 func ReadSetValues() error {
 	Logger.Debugf("ReadSetValues")
-	for _, v := range commonValues {
+	for _, v := range Values {
 		Logger.Debugf("parsing [%s]", v)
-		err := strvals.ParseInto(v, commonValuesMap)
+		err := strvals.ParseInto(v, ValuesMap)
 		HandleError(err)
 	}
 	return nil
@@ -162,13 +165,13 @@ func ReadSetValues() error {
 
 func ReadValuesFiles() error {
 	Logger.Debugf("ReadValuesFiles")
-	for _, f := range commonValuesFiles {
+	for _, f := range ValuesFiles {
 		currentValues := map[string]interface{}{}
 		bytes, err := readFile(f)
 		HandleError(err)
 		err = yaml.Unmarshal(bytes, &currentValues)
 		HandleError(err)
-		commonValuesMap = mergeMaps(commonValuesMap, currentValues)
+		ValuesMap = mergeMaps(ValuesMap, currentValues)
 	}
 	return nil
 }
@@ -211,7 +214,7 @@ func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
 	// setup go template delimiters
 	leftDelim := DefaultLeftDelim
 	rightDelim := DefaultRightDelim
-	if commonUseAlternateDelims {
+	if UseAlternateDelims {
 		leftDelim = AltLeftDelim
 		rightDelim = AltRightDelim
 	}
@@ -233,8 +236,8 @@ func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
 
 	var tplOut bytes.Buffer
 
-	Logger.Debugf("Using Values:\n%s", commonValuesMap)
-	err := tpl.Execute(&tplOut, commonValuesMap)
+	Logger.Debugf("Using Values:\n%s", ValuesMap)
+	err := tpl.Execute(&tplOut, ValuesMap)
 	HandleError(err)
 
 	return tplOut.Bytes()

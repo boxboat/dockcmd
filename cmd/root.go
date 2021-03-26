@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/boxboat/dockcmd/cmd/common"
 	"os"
 	"strings"
 
@@ -29,8 +30,6 @@ import (
 var (
 	// EnableDebug compile flag.
 	EnableDebug = "true"
-	// Logger for global use
-	Logger = log.New()
 	// CfgFile containing dockcmd config
 	CfgFile string
 	debug   bool
@@ -38,16 +37,16 @@ var (
 
 // rootCmdPersistentPreRunE configures logging
 func rootCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
-	Logger.SetOutput(os.Stdout)
-	Logger.SetFormatter(&log.TextFormatter{
+	common.Logger.SetOutput(os.Stdout)
+	common.Logger.SetFormatter(&log.TextFormatter{
 		FullTimestamp: true,
 	})
 	if debug {
-		Logger.SetLevel(log.DebugLevel)
+		common.Logger.SetLevel(log.DebugLevel)
 	} else {
-		Logger.SetLevel(log.WarnLevel)
+		common.Logger.SetLevel(log.WarnLevel)
 	}
-	Logger.Debugln("rootCmdPersistentPreRunE")
+	common.Logger.Debugln("rootCmdPersistentPreRunE")
 	return nil
 }
 
@@ -85,7 +84,7 @@ func init() {
 		rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "", false, "debug output")
 	}
 
-	viper.BindPFlags(rootCmd.PersistentFlags())
+	_ = viper.BindPFlags(rootCmd.PersistentFlags())
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -113,6 +112,6 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		Logger.Debugf("Using config file: [%s]", viper.ConfigFileUsed())
+		common.Logger.Debugf("Using config file: [%s]", viper.ConfigFileUsed())
 	}
 }
