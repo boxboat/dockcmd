@@ -16,147 +16,37 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
+	"github.com/boxboat/dockcmd/cmd/common"
+	"github.com/boxboat/dockcmd/cmd/vault"
 	"text/template"
 
-	"github.com/hashicorp/vault/api"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-const (
-	vaultTokenAuth = "vaultToken"
-	vaultRoleAuth  = "vaultRole"
-)
-
-var (
-	vaultAuth        string
-	vaultAddr        string
-	vaultClient      *api.Client
-	vaultToken       string
-	vaultRoleID      string
-	vaultSecretID    string
-	vaultSecretCache map[string]map[string]interface{}
-)
-
-func getVaultClient() *api.Client {
-	if vaultClient == nil {
-		config := api.DefaultConfig()
-		config.Address = vaultAddr
-		var err error
-		vaultClient, err = api.NewClient(config)
-		HandleError(err)
-
-		if vaultAuth == vaultRoleAuth {
-			Logger.Debugf(
-				"getting vault-token using vault-role-id {%s} and vault-secret-id {%s}",
-				vaultRoleID,
-				vaultSecretID)
-			appRoleLogin := map[string]interface{}{
-				"role_id":   vaultRoleID,
-				"secret_id": vaultSecretID,
-			}
-			resp, err := vaultClient.Logical().Write("auth/approle/login", appRoleLogin)
-			HandleError(err)
-			if resp.Auth == nil {
-				HandleError(
-					errors.New(
-						"failed to obtain VAULT_TOKEN using vault-role-id and vault-secret-id"))
-			}
-			vaultToken = resp.Auth.ClientToken
-		}
-		Logger.Debugf("Using vault-token {%s}", vaultToken)
-		vaultClient.SetToken(vaultToken)
-	}
-	return vaultClient
-}
-
-func getVaultSecret(path string, key string) string {
-	if val, ok := vaultSecretCache[path]; ok {
-		Logger.Debugf("Using cached [%s][%s]", path, key)
-		secretStr, ok := val[key].(string)
-		if !ok {
-			HandleError(
-				fmt.Errorf(
-					"Could not convert [%s][%s] to string",
-					path,
-					key))
-		}
-		return secretStr
-	}
-
-	Logger.Debugf("Reading secret[%s] key[%s]", path, key)
-
-	if vaultSecretCache[path] == nil {
-		vaultSecretCache[path] = make(map[string]interface{})
-	}
-
-
-
-	secretStr := ""
-	ok := false
-
-	mountPath, v2, err := isKVv2(path, getVaultClient())
-	HandleError(err)
-	if v2 {
-		queryPath := addPrefixToVKVPath(path, mountPath, "data")
-		// make empty query for ReadWithData (always retrieve latest secret from v2 kv store)
-		query := make(map[string][] string)
-		secret, err := getVaultClient().Logical().ReadWithData(queryPath, query)
-		HandleError(err)
-		if secret != nil {
-			secretStr, ok = secret.Data["data"].(map[string]interface{})[key].(string)
-		}
-		if !ok {
-			HandleError(
-				fmt.Errorf(
-					"could not convert vault response [%s][%s] to string",
-					path,
-					key))
-		}
-		vaultSecretCache[path] = secret.Data["data"].(map[string]interface{})
-	} else {
-		secret, err := getVaultClient().Logical().Read(path)
-		HandleError(err)
-		if secret != nil {
-			secretStr, ok = secret.Data[key].(string)
-		}
-		if !ok {
-			HandleError(
-				fmt.Errorf(
-					"could not convert vault response [%s][%s] to string",
-					path,
-					key))
-		}
-		vaultSecretCache[path] = secret.Data
-	}
-
-	return secretStr
-}
 
 // vaultCmdPersistentPreRunE checks required persistent tokens for vaultCmd
 func vaultCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	if err := rootCmdPersistentPreRunE(cmd, args); err != nil {
 		return err
 	}
-	Logger.Debugln("vaultCmdPersistentPreRunE")
-	vaultAddr = viper.GetString("vault-addr")
-	if vaultAddr == "" {
+	common.Logger.Debugln("vaultCmdPersistentPreRunE")
+	vault.Addr = viper.GetString("vault-addr")
+	if vault.Addr == "" {
 		return errors.New("${VAULT_ADDR} must be set or passed in via --vault-addr")
 	}
-	vaultToken = viper.GetString("vault-token")
-	vaultRoleID = viper.GetString("vault-role-id")
-	vaultSecretID = viper.GetString("vault-secret-id")
+	vault.Token = viper.GetString("vault-token")
+	vault.RoleID = viper.GetString("vault-role-id")
+	vault.SecretID = viper.GetString("vault-secret-id")
 
-	if vaultRoleID != "" && vaultSecretID != "" {
-		vaultAuth = vaultRoleAuth
-	} else if vaultToken == "" {
+	if vault.RoleID != "" && vault.SecretID != "" {
+		vault.Auth = vault.RoleAuth
+	} else if vault.Token == "" {
 		return errors.New(
 			`${VAULT_TOKEN} must be set or passed in via --vault-token
  					or ${VAULT_ROLE_ID} and ${VAULT_SECRET_ID} must be set or passed in
 					via --vault-role-id and --vault-secret-id respectively`)
 	} else {
-		vaultAuth = vaultTokenAuth
+		vault.Auth = vault.TokenAuth
 	}
 	return nil
 }
@@ -202,12 +92,12 @@ keyD: "<value-of-secret/root-d-from-vault>"
 ...
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		Logger.Debug("get-secrets called")
-		Logger.Debugf("Vault URL: '%s'", vaultAddr)
+		common.Logger.Debug("get-secrets called")
+		common.Logger.Debugf("Vault URL: '%s'", vault.Addr)
 
 		// create custom function map
 		funcMap := template.FuncMap{
-			"vault": getVaultSecret,
+			"vault": vault.GetVaultSecret,
 		}
 
 		var files []string
@@ -215,13 +105,13 @@ keyD: "<value-of-secret/root-d-from-vault>"
 			files = args
 		}
 
-		CommonGetSecrets(files, funcMap)
+		common.CommonGetSecrets(files, funcMap)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		Logger.Debug("PreRunE")
-		HandleError(ReadValuesFiles())
-		HandleError(ReadSetValues())
+		common.Logger.Debug("PreRunE")
+		common.HandleError(common.ReadValuesFiles())
+		common.HandleError(common.ReadSetValues())
 		return nil
 	},
 	Args: cobra.MinimumNArgs(0),
@@ -233,28 +123,28 @@ func init() {
 	// vault command and common persistent flags
 	vaultCmd.AddCommand(vaultGetSecretsCmd)
 	vaultCmd.PersistentFlags().StringVarP(
-		&vaultAddr,
+		&vault.Addr,
 		"vault-addr",
 		"",
 		"",
 		"Vault ADDR")
 	viper.BindEnv("vault-addr", "VAULT_ADDR")
 	vaultCmd.PersistentFlags().StringVarP(
-		&vaultToken,
+		&vault.Token,
 		"vault-token",
 		"",
 		"",
 		"Vault Token can alternatively be set using ${VAULT_TOKEN}")
 
 	vaultCmd.PersistentFlags().StringVarP(
-		&vaultRoleID,
+		&vault.RoleID,
 		"vault-role-id",
 		"",
 		"",
 		"Vault Role Id if not using vault-token can alternatively be set using ${VAULT_ROLE_ID} (also requires vault-secret-id)")
 
 	vaultCmd.PersistentFlags().StringVarP(
-		&vaultSecretID,
+		&vault.SecretID,
 		"vault-secret-id",
 		"",
 		"",
@@ -265,13 +155,13 @@ func init() {
 	viper.BindEnv("vault-secret-id", "VAULT_SECRET_ID")
 	viper.BindPFlags(vaultCmd.PersistentFlags())
 
-	AddSetValuesSupport(vaultGetSecretsCmd, &commonValues)
-	AddValuesFileSupport(vaultGetSecretsCmd, &commonValuesFiles)
-	AddUseAlternateDelimitersSupport(vaultGetSecretsCmd, &commonUseAlternateDelims)
-	AddEditInPlaceSupport(vaultGetSecretsCmd, &commonEditInPlace)
+	common.AddSetValuesSupport(vaultGetSecretsCmd, &common.Values)
+	common.AddValuesFileSupport(vaultGetSecretsCmd, &common.ValuesFiles)
+	common.AddUseAlternateDelimitersSupport(vaultGetSecretsCmd, &common.UseAlternateDelims)
+	common.AddEditInPlaceSupport(vaultGetSecretsCmd, &common.EditInPlace)
 
-	AddInputFileSupport(vaultGetSecretsCmd, &commonGetSecretsInputFile)
-	AddOutputFileSupport(vaultGetSecretsCmd, &commonGetSecretsOutputFile)
+	common.AddInputFileSupport(vaultGetSecretsCmd, &common.GetSecretsInputFile)
+	common.AddOutputFileSupport(vaultGetSecretsCmd, &common.GetSecretsOutputFile)
 
-	vaultSecretCache = make(map[string]map[string]interface{})
+	vault.SecretCache = make(map[string]map[string]interface{})
 }

@@ -3,21 +3,35 @@ module github.com/boxboat/dockcmd
 go 1.15
 
 require (
-	contrib.go.opencensus.io/exporter/ocagent v0.4.12 // indirect
-	github.com/Azure/azure-sdk-for-go v36.2.0+incompatible
+	github.com/Azure/azure-sdk-for-go v52.6.0+incompatible
 	github.com/Azure/go-autorest v14.2.0+incompatible
-	github.com/Azure/go-autorest/autorest/azure/auth v0.4.0
+	github.com/Azure/go-autorest/autorest/azure/auth v0.5.7 // indirect
+	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
+	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.1.0
 	github.com/aws/aws-sdk-go v1.35.25
+	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/elastic/go-elasticsearch/v6 v6.8.5
 	github.com/elastic/go-elasticsearch/v7 v7.5.0
-	github.com/google/uuid v1.1.1 // indirect
+	github.com/fatih/color v1.9.0 // indirect
+	github.com/frankban/quicktest v1.4.1 // indirect
+	github.com/go-test/deep v1.0.2 // indirect
+	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/vault v1.4.7
 	github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
+	github.com/hashicorp/vault/sdk v0.1.14-0.20200922221257-86ee24f8530b // indirect
+	github.com/kr/pretty v0.2.0 // indirect
+	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/mitchellh/reflectwalk v1.0.1 // indirect
+	github.com/pierrec/lz4 v2.2.6+incompatible // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/viper v1.7.1
+	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b // indirect
+	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9 // indirect
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	helm.sh/helm/v3 v3.3.0
 	sigs.k8s.io/yaml v1.2.0
 

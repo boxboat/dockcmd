@@ -15,120 +15,35 @@
 package cmd
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/keyvault/keyvault"
-	kvauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
+	"github.com/boxboat/dockcmd/cmd/azure"
+	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
 	"text/template"
 )
 
-var (
-	initialized         = false
-	azureTenantID       string
-	azureClientID       string
-	azureClientSecret   string
-	azureKeyVaultName   string
-	azureKeyVaultClient keyvault.BaseClient
-	azureSecretCache    map[string]map[string]interface{}
-	azureUseAzCliLogin  = false
-)
 
-func getKeyVaultClient() keyvault.BaseClient {
-	if !initialized {
-		if azureUseAzCliLogin {
-			authorizer, err := kvauth.NewAuthorizerFromCLI()
-			HandleError(err)
-			azureKeyVaultClient = keyvault.New()
-			azureKeyVaultClient.Authorizer = authorizer
-			initialized = true
-		} else {
-			authorizer, err := kvauth.NewAuthorizerFromEnvironment()
-			HandleError(err)
-			azureKeyVaultClient = keyvault.New()
-			azureKeyVaultClient.Authorizer = authorizer
-			initialized = true
-		}
-	}
-	return azureKeyVaultClient
-}
-
-func getAzureJSONSecret(secretName string, secretKey string) string {
-	Logger.Debugf("Retrieving [%s][%s]", secretName, secretKey)
-
-	if val, ok := azureSecretCache[secretName]; ok {
-		Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		secretStr, ok := val[secretKey].(string)
-		if !ok {
-			HandleError(
-				fmt.Errorf(
-					"Could not convert [%s][%s] to string",
-					secretName,
-					secretKey))
-		}
-		return secretStr
-	}
-
-	secretResp, err := getKeyVaultClient().GetSecret(
-		context.Background(),
-		"https://"+azureKeyVaultName+".vault.azure.net",
-		secretName, "")
-	HandleError(err)
-	secretJSON := *secretResp.Value
-	var response map[string]interface{}
-	json.Unmarshal([]byte(secretJSON), &response)
-
-	secretStr, ok := response[secretKey].(string)
-	if !ok {
-		HandleError(
-			fmt.Errorf(
-				"Could not convert Key Vault response[%s][%s] to string",
-				secretName,
-				secretKey))
-	}
-	if azureSecretCache[secretName] == nil {
-		azureSecretCache[secretName] = make(map[string]interface{})
-	}
-	azureSecretCache[secretName] = response
-	return secretStr
-}
-
-func getAzureTextSecret(secretName string) string {
-	Logger.Debugf("getAzureTextSecret [%s]", secretName)
-
-	secretResp, err := getKeyVaultClient().GetSecret(
-		context.Background(),
-		"https://"+azureKeyVaultName+".vault.azure.net",
-		secretName, "")
-	HandleError(err)
-	secretStr := *secretResp.Value
-
-	return secretStr
-
-}
 
 // azureRegionCmdPersistentPreRunE checks required persistent tokens for azureCmd
 func azureCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	if err := rootCmdPersistentPreRunE(cmd, args); err != nil {
 		return err
 	}
-	Logger.Debugln("azureCmdPersistentPreRunE")
+	common.Logger.Debugln("azureCmdPersistentPreRunE")
 
-	azureTenantID = viper.GetString("tenant")
-	azureClientID = viper.GetString("client-id")
-	azureClientSecret = viper.GetString("client-secret")
+	azure.TenantID = viper.GetString("tenant")
+	azure.ClientID = viper.GetString("client-id")
+	azure.ClientSecret = viper.GetString("client-secret")
 
-	if (azureTenantID == "" && azureClientID == "" && azureClientSecret == "") || azureUseAzCliLogin {
+	if (azure.TenantID == "" && azure.ClientID == "" && azure.ClientSecret == "") || azure.UseAzCliLogin {
 		// set to true in case where no service principal credentials provided
-		azureUseAzCliLogin = true
+		azure.UseAzCliLogin = true
 	} else {
 		// ensure required environment variables are set
-		os.Setenv("AZURE_TENANT_ID", azureTenantID)
-		os.Setenv("AZURE_CLIENT_ID", azureClientID)
-		os.Setenv("AZURE_CLIENT_SECRET", azureClientSecret)
+		os.Setenv("AZURE_TENANT_ID", azure.TenantID)
+		os.Setenv("AZURE_CLIENT_ID", azure.ClientID)
+		os.Setenv("AZURE_CLIENT_SECRET", azure.ClientSecret)
 	}
 	return nil
 }
@@ -175,12 +90,12 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 ...
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		Logger.Debug("get-secrets called")
+		common.Logger.Debug("get-secrets called")
 
 		// create custom function map
 		funcMap := template.FuncMap{
-			"azureJson": getAzureJSONSecret,
-			"azureText": getAzureTextSecret,
+			"azureJson": azure.GetAzureJSONSecret,
+			"azureText": azure.GetAzureTextSecret,
 		}
 
 		var files []string
@@ -188,13 +103,13 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 			files = args
 		}
 
-		CommonGetSecrets(files, funcMap)
+		common.CommonGetSecrets(files, funcMap)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		Logger.Debug("PreRunE")
-		HandleError(ReadValuesFiles())
-		HandleError(ReadSetValues())
+		common.Logger.Debug("PreRunE")
+		common.HandleError(common.ReadValuesFiles())
+		common.HandleError(common.ReadSetValues())
 		return nil
 	},
 }
@@ -205,12 +120,12 @@ func init() {
 	// azure command and common persistent flags
 	azureCmd.AddCommand(azureGetSecretsCmd)
 	azureCmd.PersistentFlags().BoolVarP(
-		&azureUseAzCliLogin, "az-cli-login",
+		&azure.UseAzCliLogin, "az-cli-login",
 		"",
 		false,
 		"access credentials provided by az login - default if tenant, client-id and client-secret are not set")
 	azureCmd.PersistentFlags().StringVarP(
-		&azureTenantID,
+		&azure.TenantID,
 		"tenant",
 		"",
 		"",
@@ -218,14 +133,14 @@ func init() {
 	viper.BindEnv("tenant", "AZURE_TENANT_ID")
 
 	azureCmd.PersistentFlags().StringVarP(
-		&azureClientID,
+		&azure.ClientID,
 		"client-id",
 		"",
 		"",
 		"Azure Client ID can alternatively be set using ${AZURE_CLIENT_ID}")
 
 	azureCmd.PersistentFlags().StringVarP(
-		&azureClientSecret,
+		&azure.ClientSecret,
 		"client-secret",
 		"",
 		"",
@@ -237,18 +152,18 @@ func init() {
 	viper.BindPFlags(azureCmd.PersistentFlags())
 
 	azureGetSecretsCmd.PersistentFlags().StringVarP(
-		&azureKeyVaultName,
+		&azure.KeyVaultName,
 		"key-vault",
 		"",
 		"",
 		"Azure Key Vault Name")
-	AddSetValuesSupport(azureGetSecretsCmd, &commonValues)
-	AddValuesFileSupport(azureGetSecretsCmd, &commonValuesFiles)
-	AddUseAlternateDelimitersSupport(azureGetSecretsCmd, &commonUseAlternateDelims)
-	AddEditInPlaceSupport(azureGetSecretsCmd, &commonEditInPlace)
+	common.AddSetValuesSupport(azureGetSecretsCmd, &common.Values)
+	common.AddValuesFileSupport(azureGetSecretsCmd, &common.ValuesFiles)
+	common.AddUseAlternateDelimitersSupport(azureGetSecretsCmd, &common.UseAlternateDelims)
+	common.AddEditInPlaceSupport(azureGetSecretsCmd, &common.EditInPlace)
 
-	AddInputFileSupport(azureGetSecretsCmd, &commonGetSecretsInputFile)
-	AddOutputFileSupport(azureGetSecretsCmd, &commonGetSecretsOutputFile)
+	common.AddInputFileSupport(azureGetSecretsCmd, &common.GetSecretsInputFile)
+	common.AddOutputFileSupport(azureGetSecretsCmd, &common.GetSecretsOutputFile)
 
-	azureSecretCache = make(map[string]map[string]interface{})
+	azure.SecretCache = make(map[string]map[string]interface{})
 }
