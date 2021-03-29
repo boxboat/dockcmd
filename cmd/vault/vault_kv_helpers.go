@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // copied from github.com/vault/command/kv_helpers
-package cmd
+package vault
 
 import (
 	"errors"
