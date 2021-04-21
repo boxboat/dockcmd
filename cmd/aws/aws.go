@@ -42,6 +42,10 @@ var (
 	CacheTTL             = 5 * time.Minute
 )
 
+func init(){
+	SecretCache = cache.New(CacheTTL, CacheTTL)
+}
+
 // SessionProvider custom provider to allow for fallback to session configured credentials.
 type SessionProvider struct {
 	Session *session.Session
@@ -58,7 +62,6 @@ func (m *SessionProvider) IsExpired() bool {
 }
 
 func getAwsCredentials(sess *session.Session) *credentials.Credentials {
-
 	var creds = sess.Config.Credentials
 	if UseChainCredentials {
 		creds = credentials.NewChainCredentials(
@@ -102,11 +105,6 @@ func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
 }
 
 func GetAwsSecret(secretName string, secretKey string) string {
-
-	if SecretCache == nil {
-		SecretCache = cache.New(CacheTTL, CacheTTL)
-	}
-
 	common.Logger.Debugf("Retrieving %s", secretName)
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
@@ -192,5 +190,4 @@ func GetAwsSecret(secretName string, secretKey string) string {
 	_ = SecretCache.Add(secretName, response, cache.DefaultExpiration)
 
 	return secretStr
-
 }

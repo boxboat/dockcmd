@@ -38,6 +38,10 @@ var (
 	CacheTTL       = 5 * time.Minute
 )
 
+func init(){
+	SecretCache = cache.New(CacheTTL, CacheTTL)
+}
+
 func getKeyVaultClient() keyvault.BaseClient {
 	if !initialized {
 		if UseAzCliLogin {
@@ -64,10 +68,6 @@ func getKeyVaultClient() keyvault.BaseClient {
 
 func GetAzureJSONSecret(secretName string, secretKey string) string {
 	common.Logger.Debugf("Retrieving [%s][%s]", secretName, secretKey)
-
-	if SecretCache == nil {
-		SecretCache = cache.New(CacheTTL, CacheTTL)
-	}
 
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
@@ -109,10 +109,6 @@ func GetAzureJSONSecret(secretName string, secretKey string) string {
 
 func GetAzureTextSecret(secretName string) string {
 	common.Logger.Debugf("GetAzureTextSecret [%s]", secretName)
-
-	if SecretCache == nil {
-		SecretCache = cache.New(CacheTTL, CacheTTL)
-	}
 
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s]", secretName)

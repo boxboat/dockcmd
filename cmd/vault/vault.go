@@ -39,6 +39,10 @@ var (
 	CacheTTL    = 5 * time.Minute
 )
 
+func init(){
+	SecretCache = cache.New(CacheTTL, CacheTTL)
+}
+
 func getVaultClient() *api.Client {
 	if Client == nil {
 		config := api.DefaultConfig()
@@ -72,10 +76,6 @@ func getVaultClient() *api.Client {
 }
 
 func GetVaultSecret(path string, key string) string {
-
-	if SecretCache == nil {
-		SecretCache = cache.New(CacheTTL, CacheTTL)
-	}
 
 	if val, ok := SecretCache.Get(path); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", path, key)
