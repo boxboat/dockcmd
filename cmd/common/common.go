@@ -20,11 +20,9 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"sigs.k8s.io/yaml"
 	"strings"
 	"text/template"
-	"time"
-
-	"sigs.k8s.io/yaml"
 
 	"github.com/Masterminds/sprig/v3"
 	log "github.com/sirupsen/logrus"
@@ -54,11 +52,6 @@ var (
 	ValuesFiles          []string
 	ValuesMap            = map[string]interface{}{}
 )
-
-type SecretCacheItem struct {
-	Secret   map[string]interface{}
-	CachedAt time.Time
-}
 
 // AddEditInPlaceSupport will add the standard edit in place option and store
 // the user input in the provided bool variable.

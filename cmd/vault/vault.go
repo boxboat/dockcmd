@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/hashicorp/vault/api"
+	"github.com/patrickmn/go-cache"
 	"time"
 )
 
@@ -34,8 +35,8 @@ var (
 	Token       string
 	RoleID      string
 	SecretID    string
-	SecretCache map[string]common.SecretCacheItem
-	CacheTTL    = 5.0
+	SecretCache *cache.Cache
+	CacheTTL    = 5 * time.Minute
 )
 
 func getVaultClient() *api.Client {
@@ -71,12 +72,14 @@ func getVaultClient() *api.Client {
 }
 
 func GetVaultSecret(path string, key string) string {
+
 	if SecretCache == nil {
-		SecretCache = make(map[string]common.SecretCacheItem)
+		SecretCache = cache.New(CacheTTL, CacheTTL)
 	}
-	if val, ok := SecretCache[path]; ok && time.Since(val.CachedAt).Minutes() < CacheTTL {
+
+	if val, ok := SecretCache.Get(path); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", path, key)
-		secretStr, ok := val.Secret[key].(string)
+		secretStr, ok := val.(map[string]interface{})[key].(string)
 		if !ok {
 			common.HandleError(
 				fmt.Errorf(
@@ -110,10 +113,7 @@ func GetVaultSecret(path string, key string) string {
 					path,
 					key))
 		}
-		SecretCache[path] = common.SecretCacheItem{
-			Secret: secret.Data["data"].(map[string]interface{}),
-			CachedAt: time.Now(),
-		}
+		_ = SecretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
 	} else {
 		secret, err := getVaultClient().Logical().Read(path)
 		common.HandleError(err)
@@ -127,10 +127,7 @@ func GetVaultSecret(path string, key string) string {
 					path,
 					key))
 		}
-		SecretCache[path] = common.SecretCacheItem{
-			Secret: secret.Data,
-			CachedAt: time.Now(),
-		}
+		_ = SecretCache.Add(path, secret.Data, cache.DefaultExpiration)
 	}
 
 	return secretStr

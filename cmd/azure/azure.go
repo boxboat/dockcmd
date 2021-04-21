@@ -21,6 +21,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/keyvault/keyvault"
 	kvauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
 	"github.com/boxboat/dockcmd/cmd/common"
+	"github.com/patrickmn/go-cache"
 	"os"
 	"time"
 )
@@ -32,9 +33,9 @@ var (
 	ClientSecret   string
 	KeyVaultName   string
 	KeyVaultClient keyvault.BaseClient
-	SecretCache    map[string]common.SecretCacheItem
+	SecretCache    *cache.Cache
 	UseAzCliLogin  = false
-	CacheTTL       = 5.0
+	CacheTTL       = 5 * time.Minute
 )
 
 func getKeyVaultClient() keyvault.BaseClient {
@@ -65,12 +66,12 @@ func GetAzureJSONSecret(secretName string, secretKey string) string {
 	common.Logger.Debugf("Retrieving [%s][%s]", secretName, secretKey)
 
 	if SecretCache == nil {
-		SecretCache = make(map[string]common.SecretCacheItem)
+		SecretCache = cache.New(CacheTTL, CacheTTL)
 	}
 
-	if val, ok := SecretCache[secretName]; ok && time.Since(val.CachedAt).Minutes() < CacheTTL {
+	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		secretStr, ok := val.Secret[secretKey].(string)
+		secretStr, ok := val.(map[string]interface{})[secretKey].(string)
 		if !ok {
 			common.HandleError(
 				fmt.Errorf(
@@ -101,10 +102,8 @@ func GetAzureJSONSecret(secretName string, secretKey string) string {
 				secretKey))
 	}
 
-	SecretCache[secretName] = common.SecretCacheItem{
-		Secret:   response,
-		CachedAt: time.Now(),
-	}
+	_ = SecretCache.Add(secretName, response, cache.DefaultExpiration)
+
 	return secretStr
 }
 
@@ -112,17 +111,16 @@ func GetAzureTextSecret(secretName string) string {
 	common.Logger.Debugf("GetAzureTextSecret [%s]", secretName)
 
 	if SecretCache == nil {
-		SecretCache = make(map[string]common.SecretCacheItem)
+		SecretCache = cache.New(CacheTTL, CacheTTL)
 	}
 
-	if val, ok := SecretCache[secretName]; ok && time.Since(val.CachedAt).Minutes() < CacheTTL {
-		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretName)
-		secretStr, ok := val.Secret[secretName].(string)
+	if val, ok := SecretCache.Get(secretName); ok {
+		common.Logger.Debugf("Using cached [%s]", secretName)
+		secretStr, ok := val.(string)
 		if !ok {
 			common.HandleError(
 				fmt.Errorf(
-					"could not convert [%s][%s] to string",
-					secretName,
+					"could not convert [%s] to string",
 					secretName))
 		}
 		return secretStr
@@ -135,14 +133,7 @@ func GetAzureTextSecret(secretName string) string {
 	common.HandleError(err)
 	secretStr := *secretResp.Value
 
-	var response = make(map[string]interface{})
-	// only one secret is stored with azureText so just cache at secretName in map
-	response[secretName] = secretStr
-
-	SecretCache[secretName] = common.SecretCacheItem{
-		Secret:   response,
-		CachedAt: time.Now(),
-	}
+	_ = SecretCache.Add(secretName, secretStr, cache.DefaultExpiration)
 
 	return secretStr
 

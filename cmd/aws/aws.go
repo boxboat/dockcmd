@@ -26,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/boxboat/dockcmd/cmd/common"
+	"github.com/patrickmn/go-cache"
 	"time"
 )
 
@@ -37,8 +38,8 @@ var (
 	UseChainCredentials  bool
 	Session              *session.Session
 	SecretsManagerClient *secretsmanager.SecretsManager
-	SecretCache          map[string]common.SecretCacheItem
-	CacheTTL             = 5.0
+	SecretCache          *cache.Cache
+	CacheTTL             = 5 * time.Minute
 )
 
 // SessionProvider custom provider to allow for fallback to session configured credentials.
@@ -103,13 +104,13 @@ func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
 func GetAwsSecret(secretName string, secretKey string) string {
 
 	if SecretCache == nil {
-		SecretCache = make(map[string]common.SecretCacheItem)
+		SecretCache = cache.New(CacheTTL, CacheTTL)
 	}
 
 	common.Logger.Debugf("Retrieving %s", secretName)
-	if val, ok := SecretCache[secretName]; ok && time.Since(val.CachedAt).Minutes() < CacheTTL {
+	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		secretStr, ok := val.Secret[secretKey].(string)
+		secretStr, ok := val.(map[string]interface{})[secretKey].(string)
 		if !ok {
 			common.HandleError(
 				fmt.Errorf(
@@ -177,7 +178,8 @@ func GetAwsSecret(secretName string, secretKey string) string {
 
 	common.Logger.Debugf("Secret %s:%s", secretName, secretString)
 	var response map[string]interface{}
-	json.Unmarshal([]byte(secretString), &response)
+	err = json.Unmarshal([]byte(secretString), &response)
+	common.HandleError(err)
 
 	secretStr, ok := response[secretKey].(string)
 	if !ok {
@@ -187,10 +189,8 @@ func GetAwsSecret(secretName string, secretKey string) string {
 				secretName,
 				secretKey))
 	}
-	SecretCache[secretName] = common.SecretCacheItem{
-		Secret: response,
-		CachedAt: time.Now(),
-	}
+	_ = SecretCache.Add(secretName, response, cache.DefaultExpiration)
+
 	return secretStr
 
 }
