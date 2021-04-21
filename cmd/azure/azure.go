@@ -42,95 +42,101 @@ func init(){
 	SecretCache = cache.New(CacheTTL, CacheTTL)
 }
 
-func getKeyVaultClient() keyvault.BaseClient {
+func getKeyVaultClient() (keyvault.BaseClient, error) {
+
 	if !initialized {
 		if UseAzCliLogin {
-			authorizer, err := kvauth.NewAuthorizerFromCLI()
-			common.HandleError(err)
 			KeyVaultClient = keyvault.New()
+			authorizer, err := kvauth.NewAuthorizerFromCLI()
+			if err != nil {
+				return KeyVaultClient, err
+			}
 			KeyVaultClient.Authorizer = authorizer
 			initialized = true
 		} else {
 			// ensure required environment variables are set
-			os.Setenv("AZURE_TENANT_ID", TenantID)
-			os.Setenv("AZURE_CLIENT_ID", ClientID)
-			os.Setenv("AZURE_CLIENT_SECRET", ClientSecret)
+			_ = os.Setenv("AZURE_TENANT_ID", TenantID)
+			_ = os.Setenv("AZURE_CLIENT_ID", ClientID)
+			_ = os.Setenv("AZURE_CLIENT_SECRET", ClientSecret)
 
-			authorizer, err := kvauth.NewAuthorizerFromEnvironment()
-			common.HandleError(err)
 			KeyVaultClient = keyvault.New()
+			authorizer, err := kvauth.NewAuthorizerFromEnvironment()
+			if err != nil {
+				return KeyVaultClient, err
+			}
 			KeyVaultClient.Authorizer = authorizer
 			initialized = true
 		}
 	}
-	return KeyVaultClient
+	return KeyVaultClient, nil
 }
 
-func GetAzureJSONSecret(secretName string, secretKey string) string {
+func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
 	common.Logger.Debugf("Retrieving [%s][%s]", secretName, secretKey)
 
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		secretStr, ok := val.(map[string]interface{})[secretKey].(string)
-		if !ok {
-			common.HandleError(
-				fmt.Errorf(
-					"could not convert [%s][%s] to string",
-					secretName,
-					secretKey))
+		if secretStr, ok := val.(map[string]interface{})[secretKey].(string); ok {
+			return secretStr, nil
 		}
-		return secretStr
 	}
 
-	secretResp, err := getKeyVaultClient().GetSecret(
+	client, err := getKeyVaultClient()
+	if err != nil {
+		return "", err
+	}
+
+	secretResp, err := client.GetSecret(
 		context.Background(),
 		"https://"+KeyVaultName+".vault.azure.net",
 		secretName, "")
-	common.HandleError(err)
+	if err != nil {
+		return "", err
+	}
 	secretJSON := *secretResp.Value
 	var response map[string]interface{}
 	if err := json.Unmarshal([]byte(secretJSON), &response); err != nil {
-		common.HandleError(err)
+		return "", err
 	}
 
 	secretStr, ok := response[secretKey].(string)
 	if !ok {
-		common.HandleError(
-			fmt.Errorf(
-				"Could not convert Key Vault response[%s][%s] to string",
-				secretName,
-				secretKey))
+		return "", fmt.Errorf("could not convert Key Vault response[%s][%s] to string",
+			secretName,
+			secretKey)
 	}
 
 	_ = SecretCache.Add(secretName, response, cache.DefaultExpiration)
 
-	return secretStr
+	return secretStr, nil
 }
 
-func GetAzureTextSecret(secretName string) string {
+func GetAzureTextSecret(secretName string) (string, error) {
 	common.Logger.Debugf("GetAzureTextSecret [%s]", secretName)
 
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s]", secretName)
-		secretStr, ok := val.(string)
-		if !ok {
-			common.HandleError(
-				fmt.Errorf(
-					"could not convert [%s] to string",
-					secretName))
+		if secretStr, ok := val.(string); ok {
+			return secretStr, nil
 		}
-		return secretStr
 	}
 
-	secretResp, err := getKeyVaultClient().GetSecret(
+	client, err := getKeyVaultClient()
+	if err != nil {
+		return "", err
+	}
+
+	secretResp, err := client.GetSecret(
 		context.Background(),
 		"https://"+KeyVaultName+".vault.azure.net",
 		secretName, "")
-	common.HandleError(err)
+	if err != nil {
+		return "", err
+	}
 	secretStr := *secretResp.Value
 
 	_ = SecretCache.Add(secretName, secretStr, cache.DefaultExpiration)
 
-	return secretStr
+	return secretStr, nil
 
 }

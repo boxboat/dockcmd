@@ -83,43 +83,50 @@ func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 	return creds
 }
 
-func getAwsSession() *session.Session {
+func getAwsSession() (*session.Session, error) {
 	if Session == nil {
 		var err error
 		Session, err = session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable,
 		})
-		common.HandleError(err)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return Session
+	return Session, nil
 }
 
-func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
+func getAwsSecretsManagerClient() (*secretsmanager.SecretsManager, error) {
 	if SecretsManagerClient == nil {
+		sess, err := getAwsSession()
+		if err != nil {
+			return nil, err
+		}
 		SecretsManagerClient = secretsmanager.New(
-			getAwsSession(),
+			sess,
 			aws.NewConfig().WithRegion(Region).WithCredentials(
-				getAwsCredentials(getAwsSession())))
+				getAwsCredentials(sess)))
 	}
-	return SecretsManagerClient
+	return SecretsManagerClient, nil
 }
 
-func GetAwsSecret(secretName string, secretKey string) string {
+func GetAwsSecret(secretName string, secretKey string) (string, error) {
+
+	var secretStr = ""
+
 	common.Logger.Debugf("Retrieving %s", secretName)
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		secretStr, ok := val.(map[string]interface{})[secretKey].(string)
-		if !ok {
-			common.HandleError(
-				fmt.Errorf(
-					"Could not convert [%s][%s] to string",
-					secretName,
-					secretKey))
+		if secretStr, ok := val.(map[string]interface{})[secretKey].(string); ok {
+			return secretStr, nil
 		}
-		return secretStr
 	}
+
 	//Create a Secrets Manager client
-	svc := getAwsSecretsManagerClient()
+	svc, err := getAwsSecretsManagerClient()
+	if err != nil {
+		return "", err
+	}
 	input := &secretsmanager.GetSecretValueInput{
 		SecretId:     aws.String(secretName),
 		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
@@ -164,7 +171,7 @@ func GetAwsSecret(secretName string, secretKey string) string {
 		} else {
 			errorMessage = fmt.Sprintln(err.Error())
 		}
-		common.HandleError(errors.New(errorMessage))
+		return "", errors.New(errorMessage)
 	}
 
 	// Decrypts secret using the associated KMS CMK.
@@ -176,18 +183,17 @@ func GetAwsSecret(secretName string, secretKey string) string {
 
 	common.Logger.Debugf("Secret %s:%s", secretName, secretString)
 	var response map[string]interface{}
-	err = json.Unmarshal([]byte(secretString), &response)
-	common.HandleError(err)
+	if err = json.Unmarshal([]byte(secretString), &response); err != nil {
+		return "", err
+	}
 
 	secretStr, ok := response[secretKey].(string)
 	if !ok {
-		common.HandleError(
-			fmt.Errorf(
-				"Could not convert secrets manager response[%s][%s] to string",
-				secretName,
-				secretKey))
+		return "", fmt.Errorf("could not convert secrets manager response[%s][%s] to string",
+			secretName,
+			secretKey)
 	}
 	_ = SecretCache.Add(secretName, response, cache.DefaultExpiration)
 
-	return secretStr
+	return secretStr, nil
 }

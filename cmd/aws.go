@@ -99,13 +99,14 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 			files = args
 		}
 
-		common.CommonGetSecrets(files, funcMap)
+		err := common.GetSecrets(files, funcMap)
+		common.LogErrorAndExit(err)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		common.Logger.Debug("PreRunE")
-		common.HandleError(common.ReadValuesFiles())
-		common.HandleError(common.ReadSetValues())
+		common.LogErrorAndExit(common.ReadValuesFiles())
+		common.LogErrorAndExit(common.ReadSetValues())
 		return nil
 	},
 }
