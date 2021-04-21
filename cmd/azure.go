@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2021 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
 	"text/template"
 )
 
@@ -39,12 +38,8 @@ func azureCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	if (azure.TenantID == "" && azure.ClientID == "" && azure.ClientSecret == "") || azure.UseAzCliLogin {
 		// set to true in case where no service principal credentials provided
 		azure.UseAzCliLogin = true
-	} else {
-		// ensure required environment variables are set
-		os.Setenv("AZURE_TENANT_ID", azure.TenantID)
-		os.Setenv("AZURE_CLIENT_ID", azure.ClientID)
-		os.Setenv("AZURE_CLIENT_SECRET", azure.ClientSecret)
 	}
+
 	return nil
 }
 
@@ -55,7 +50,7 @@ var azureCmd = &cobra.Command{
 	Long:              `Commands designed to facilitate interactions with Azure`,
 	PersistentPreRunE: azureCmdPersistentPreRunE,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
@@ -130,7 +125,7 @@ func init() {
 		"",
 		"",
 		"Azure tenant ID can alternatively be set using ${AZURE_TENANT_ID}")
-	viper.BindEnv("tenant", "AZURE_TENANT_ID")
+	_ = viper.BindEnv("tenant", "AZURE_TENANT_ID")
 
 	azureCmd.PersistentFlags().StringVarP(
 		&azure.ClientID,
@@ -146,10 +141,10 @@ func init() {
 		"",
 		"Azure Client Secret Key can alternatively be set using ${AZURE_CLIENT_SECRET}")
 
-	viper.BindEnv("tenant", "AZURE_TENANT_ID")
-	viper.BindEnv("client-id", "AZURE_CLIENT_ID")
-	viper.BindEnv("client-secret", "AZURE_CLIENT_SECRET")
-	viper.BindPFlags(azureCmd.PersistentFlags())
+	_ = viper.BindEnv("tenant", "AZURE_TENANT_ID")
+	_ = viper.BindEnv("client-id", "AZURE_CLIENT_ID")
+	_ = viper.BindEnv("client-secret", "AZURE_CLIENT_SECRET")
+	_ = viper.BindPFlags(azureCmd.PersistentFlags())
 
 	azureGetSecretsCmd.PersistentFlags().StringVarP(
 		&azure.KeyVaultName,
@@ -165,5 +160,4 @@ func init() {
 	common.AddInputFileSupport(azureGetSecretsCmd, &common.GetSecretsInputFile)
 	common.AddOutputFileSupport(azureGetSecretsCmd, &common.GetSecretsOutputFile)
 
-	azure.SecretCache = make(map[string]map[string]interface{})
 }

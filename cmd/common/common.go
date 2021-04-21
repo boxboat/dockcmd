@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2021 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,9 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"sigs.k8s.io/yaml"
 	"strings"
 	"text/template"
-
-	"sigs.k8s.io/yaml"
 
 	"github.com/Masterminds/sprig/v3"
 	log "github.com/sirupsen/logrus"

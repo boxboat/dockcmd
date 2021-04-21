@@ -1,3 +1,17 @@
+// Copyright © 2021 BoxBoat engineering@boxboat.com
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package vault
 
 import (
@@ -5,6 +19,8 @@ import (
 	"fmt"
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/hashicorp/vault/api"
+	"github.com/patrickmn/go-cache"
+	"time"
 )
 
 const (
@@ -19,8 +35,13 @@ var (
 	Token       string
 	RoleID      string
 	SecretID    string
-	SecretCache map[string]map[string]interface{}
+	SecretCache *cache.Cache
+	CacheTTL    = 5 * time.Minute
 )
+
+func init(){
+	SecretCache = cache.New(CacheTTL, CacheTTL)
+}
 
 func getVaultClient() *api.Client {
 	if Client == nil {
@@ -55,9 +76,10 @@ func getVaultClient() *api.Client {
 }
 
 func GetVaultSecret(path string, key string) string {
-	if val, ok := SecretCache[path]; ok {
+
+	if val, ok := SecretCache.Get(path); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", path, key)
-		secretStr, ok := val[key].(string)
+		secretStr, ok := val.(map[string]interface{})[key].(string)
 		if !ok {
 			common.HandleError(
 				fmt.Errorf(
@@ -70,12 +92,6 @@ func GetVaultSecret(path string, key string) string {
 
 	common.Logger.Debugf("Reading secret[%s] key[%s]", path, key)
 
-	if SecretCache[path] == nil {
-		SecretCache[path] = make(map[string]interface{})
-	}
-
-
-
 	secretStr := ""
 	ok := false
 
@@ -84,7 +100,7 @@ func GetVaultSecret(path string, key string) string {
 	if v2 {
 		queryPath := addPrefixToVKVPath(path, mountPath, "data")
 		// make empty query for ReadWithData (always retrieve latest secret from v2 kv store)
-		query := make(map[string][] string)
+		query := make(map[string][]string)
 		secret, err := getVaultClient().Logical().ReadWithData(queryPath, query)
 		common.HandleError(err)
 		if secret != nil {
@@ -97,7 +113,7 @@ func GetVaultSecret(path string, key string) string {
 					path,
 					key))
 		}
-		SecretCache[path] = secret.Data["data"].(map[string]interface{})
+		_ = SecretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
 	} else {
 		secret, err := getVaultClient().Logical().Read(path)
 		common.HandleError(err)
@@ -111,7 +127,7 @@ func GetVaultSecret(path string, key string) string {
 					path,
 					key))
 		}
-		SecretCache[path] = secret.Data
+		_ = SecretCache.Add(path, secret.Data, cache.DefaultExpiration)
 	}
 
 	return secretStr
