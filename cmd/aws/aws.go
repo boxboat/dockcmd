@@ -1,3 +1,17 @@
+// Copyright © 2021 BoxBoat engineering@boxboat.com
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -12,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/boxboat/dockcmd/cmd/common"
+	"time"
 )
 
 var (
@@ -22,9 +37,9 @@ var (
 	UseChainCredentials  bool
 	Session              *session.Session
 	SecretsManagerClient *secretsmanager.SecretsManager
-	SecretCache          map[string]map[string]interface{}
+	SecretCache          map[string]common.SecretCacheItem
+	CacheTTL             = 5.0
 )
-
 
 // SessionProvider custom provider to allow for fallback to session configured credentials.
 type SessionProvider struct {
@@ -43,7 +58,7 @@ func (m *SessionProvider) IsExpired() bool {
 
 func getAwsCredentials(sess *session.Session) *credentials.Credentials {
 
-	var creds *credentials.Credentials = sess.Config.Credentials
+	var creds = sess.Config.Credentials
 	if UseChainCredentials {
 		creds = credentials.NewChainCredentials(
 			[]credentials.Provider{
@@ -87,10 +102,14 @@ func getAwsSecretsManagerClient() *secretsmanager.SecretsManager {
 
 func GetAwsSecret(secretName string, secretKey string) string {
 
+	if SecretCache == nil {
+		SecretCache = make(map[string]common.SecretCacheItem)
+	}
+
 	common.Logger.Debugf("Retrieving %s", secretName)
-	if val, ok := SecretCache[secretName]; ok {
+	if val, ok := SecretCache[secretName]; ok && time.Since(val.CachedAt).Minutes() < CacheTTL {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
-		secretStr, ok := val[secretKey].(string)
+		secretStr, ok := val.Secret[secretKey].(string)
 		if !ok {
 			common.HandleError(
 				fmt.Errorf(
@@ -116,31 +135,31 @@ func GetAwsSecret(secretName string, secretKey string) string {
 			switch aerr.Code() {
 			case secretsmanager.ErrCodeDecryptionFailure:
 				// Secrets Manager can't decrypt the protected secret text using the provided KMS key.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v",secretName, secretKey, secretsmanager.ErrCodeDecryptionFailure, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeDecryptionFailure, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeInternalServiceError:
 				// An error occurred on the server side.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v",secretName, secretKey, secretsmanager.ErrCodeInternalServiceError, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeInternalServiceError, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeInvalidParameterException:
 				// You provided an invalid value for a parameter.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v",secretName, secretKey, secretsmanager.ErrCodeInvalidParameterException, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeInvalidParameterException, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeInvalidRequestException:
 				// You provided a parameter value that is not valid for the current state of the resource.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v",secretName, secretKey, secretsmanager.ErrCodeInvalidRequestException, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeInvalidRequestException, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeResourceNotFoundException:
 				// We can't find the resource that you asked for.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v",secretName, secretKey, secretsmanager.ErrCodeResourceNotFoundException, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeResourceNotFoundException, aerr.Error())
 				break
 
 			default:
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v",secretName, secretKey, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v", secretName, secretKey, aerr.Error())
 				break
 			}
 		} else {
@@ -160,9 +179,6 @@ func GetAwsSecret(secretName string, secretKey string) string {
 	var response map[string]interface{}
 	json.Unmarshal([]byte(secretString), &response)
 
-	if SecretCache[secretName] == nil {
-		SecretCache[secretName] = make(map[string]interface{})
-	}
 	secretStr, ok := response[secretKey].(string)
 	if !ok {
 		common.HandleError(
@@ -171,7 +187,10 @@ func GetAwsSecret(secretName string, secretKey string) string {
 				secretName,
 				secretKey))
 	}
-	SecretCache[secretName] = response
+	SecretCache[secretName] = common.SecretCacheItem{
+		Secret: response,
+		CachedAt: time.Now(),
+	}
 	return secretStr
 
 }

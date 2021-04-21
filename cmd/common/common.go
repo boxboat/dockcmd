@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2021 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	"sigs.k8s.io/yaml"
 
@@ -53,6 +54,11 @@ var (
 	ValuesFiles          []string
 	ValuesMap            = map[string]interface{}{}
 )
+
+type SecretCacheItem struct {
+	Secret   map[string]interface{}
+	CachedAt time.Time
+}
 
 // AddEditInPlaceSupport will add the standard edit in place option and store
 // the user input in the provided bool variable.

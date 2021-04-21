@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2021 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -157,5 +157,4 @@ func init() {
 	common.AddInputFileSupport(awsGetSecretsCmd, &common.GetSecretsInputFile)
 	common.AddOutputFileSupport(awsGetSecretsCmd, &common.GetSecretsOutputFile)
 
-	aws.SecretCache = make(map[string]map[string]interface{})
 }
