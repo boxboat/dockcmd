@@ -98,9 +98,8 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 			files = args
 		}
 
-		if err := common.GetSecrets(files, funcMap); err != nil {
-			common.LogErrorAndExit(err)
-		}
+		err := common.GetSecrets(files, funcMap)
+		common.LogErrorAndExit(err)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
