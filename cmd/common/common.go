@@ -282,12 +282,18 @@ func WriteFileOrStdout(data []byte, output string) error {
 	return nil
 }
 
-// LogErrorAndExit will generically handle an error by logging its contents
+// ExitIfError will generically handle an error by logging its contents
 // and exiting with a return code of 1.
-func LogErrorAndExit(err error) {
+func ExitIfError(err error) {
 	if err != nil {
-		Logger.Errorf("%s", err)
+		Logger.Errorf("%v", err)
 		os.Exit(1)
+	}
+}
+
+func LogIfError(err error) {
+	if err != nil {
+		Logger.Warnf("%v", err)
 	}
 }
 

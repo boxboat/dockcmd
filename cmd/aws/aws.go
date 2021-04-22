@@ -42,7 +42,7 @@ var (
 	CacheTTL             = 5 * time.Minute
 )
 
-func init(){
+func init() {
 	SecretCache = cache.New(CacheTTL, CacheTTL)
 }
 
@@ -111,10 +111,8 @@ func getAwsSecretsManagerClient() (*secretsmanager.SecretsManager, error) {
 }
 
 func GetAwsSecret(secretName string, secretKey string) (string, error) {
-
-	var secretStr = ""
-
 	common.Logger.Debugf("Retrieving %s", secretName)
+
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
 		if secretStr, ok := val.(map[string]interface{})[secretKey].(string); ok {

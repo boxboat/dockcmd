@@ -99,13 +99,13 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 		}
 
 		err := common.GetSecrets(files, funcMap)
-		common.LogErrorAndExit(err)
+		common.ExitIfError(err)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		common.Logger.Debug("PreRunE")
-		common.LogErrorAndExit(common.ReadValuesFiles())
-		common.LogErrorAndExit(common.ReadSetValues())
+		common.ExitIfError(common.ReadValuesFiles())
+		common.ExitIfError(common.ReadSetValues())
 		return nil
 	},
 }

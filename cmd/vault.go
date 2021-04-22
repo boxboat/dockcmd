@@ -58,7 +58,7 @@ var vaultCmd = &cobra.Command{
 	Long:              `Commands designed to facilitate interactions with Hashicorp Vault`,
 	PersistentPreRunE: vaultCmdPersistentPreRunE,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
@@ -106,13 +106,13 @@ keyD: "<value-of-secret/root-d-from-vault>"
 		}
 
 		err := common.GetSecrets(files, funcMap)
-		common.LogErrorAndExit(err)
+		common.ExitIfError(err)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		common.Logger.Debug("PreRunE")
-		common.LogErrorAndExit(common.ReadValuesFiles())
-		common.LogErrorAndExit(common.ReadSetValues())
+		common.ExitIfError(common.ReadValuesFiles())
+		common.ExitIfError(common.ReadSetValues())
 		return nil
 	},
 	Args: cobra.MinimumNArgs(0),

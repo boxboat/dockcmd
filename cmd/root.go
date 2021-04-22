@@ -15,7 +15,6 @@
 package cmd
 
 import (
-	"fmt"
 	"github.com/boxboat/dockcmd/cmd/common"
 	"os"
 	"strings"
@@ -62,10 +61,8 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute(version string) {
 	rootCmd.Version = version
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	err := rootCmd.Execute()
+	common.ExitIfError(err)
 }
 
 func init() {
@@ -95,10 +92,7 @@ func initConfig() {
 	} else {
 		// Find home directory.
 		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
+		common.ExitIfError(err)
 
 		// Search config in home directory with name ".dockcmd" (without extension).
 		viper.AddConfigPath(home)

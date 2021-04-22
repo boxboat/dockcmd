@@ -54,13 +54,14 @@ foo:
 			files = args
 		}
 
-		common.GetSecrets(files, funcMap)
+		err := common.GetSecrets(files, funcMap)
+		common.ExitIfError(err)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		common.Logger.Debug("PreRunE")
-		common.LogErrorAndExit(common.ReadValuesFiles())
-		common.LogErrorAndExit(common.ReadSetValues())
+		common.ExitIfError(common.ReadValuesFiles())
+		common.ExitIfError(common.ReadSetValues())
 		return nil
 	},
 }
