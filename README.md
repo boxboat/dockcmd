@@ -84,11 +84,54 @@ keyD: {{ (azureText "root" ) | quote }}
 output:
 ```
 foo:
-  keyA: '<value-of-secret/foo-a-frome-azure-key-vault>'
-  keyB: '<value-of-secret/foo-b-frome-azure-key-vault>'
+  keyA: '<value-of-secret/foo-a-from-azure-key-vault>'
+  keyB: '<value-of-secret/foo-b-from-azure-key-vault>'
   charlie:
-    keyC: '<value-of-secret/foo-charlie-c-frome-azure-key-vault>'
+    keyC: '<value-of-secret/foo-charlie-c-from-azure-key-vault>'
 keyD: "<value-of-secret/root-from-azure-key-vault>"
+```
+
+***
+***
+## `gcp`
+
+GCP utilities are under the `gcp` sub-command. For authentication, GCP commands make use of either [Application Default Credentials](https://developers.google.com/identity/protocols/application-default-credentials), or you can provide a credentials JSON file.
+
+* GCP Credential JSON File
+  * Args: `--credentials-file <key.json>`
+
+
+For local usage you can use the [gcloud cli](https://cloud.google.com/sdk/gcloud/reference/auth/login) can be used to authenticate in the current shell with `gcloud auth application-default login`.
+
+See `dockcmd gcp --help` for more details on `gcp` flags.
+
+### `get-secrets`
+
+Retrieve secrets stored as JSON from GCP Secrets Manager. Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
+
+Secrets can be stored in GCP Secrets Manager either as plain text or as a json payload. See example below:
+
+`dockcmd gcp get-secrets --set TargetEnv=prod --input-file secret-values.yaml`
+
+`secret-values.yaml`:
+```
+---
+foo:
+  keyA: {{ (gcpJson "foo" "a") | squote }}
+  keyB: {{ (gcpJson "foo" "b") | squote }}
+  charlie:
+    keyC: {{ (gcpJson "foo-charlie" "c") | squote }}
+keyD: {{ (gcpText "root" ) | quote }}
+```
+
+output:
+```
+foo:
+  keyA: '<value-of-secret/foo-a-from-gcp-secrets-manager>'
+  keyB: '<value-of-secret/foo-b-from-gcp-secrets-manager>'
+  charlie:
+    keyC: '<value-of-secret/foo-charlie-c-from-gcp-secrets-manager>'
+keyD: "<value-of-secret/root-rom-gcp-secrets-manager>"
 ```
 
 ***
