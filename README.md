@@ -111,7 +111,7 @@ Retrieve secrets stored as JSON from GCP Secrets Manager. Input files are define
 
 Secrets can be stored in GCP Secrets Manager either as plain text or as a json payload. See example below:
 
-`dockcmd gcp get-secrets --set TargetEnv=prod --input-file secret-values.yaml`
+`dockcmd gcp get-secrets --project my-project --set TargetEnv=prod --input-file secret-values.yaml`
 
 `secret-values.yaml`:
 ```
