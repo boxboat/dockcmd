@@ -39,7 +39,7 @@ var esDeleteIndicesCmd = &cobra.Command{
 		if len(args) == 1 {
 			search = args
 		} else {
-			common.HandleError(errors.New("Provide delete string"))
+			common.ExitIfError(errors.New("Provide delete string"))
 		}
 		common.Logger.Debugf("Deleting [%s] from elasticsearch", search)
 
@@ -49,7 +49,7 @@ var esDeleteIndicesCmd = &cobra.Command{
 			settings := v.(map[string]interface{})["settings"].(map[string]interface{})
 			index := settings["index"].(map[string]interface{})
 			creationDateMs, err := strconv.ParseInt(index["creation_date"].(string), 10, 64)
-			common.HandleError(err)
+			common.ExitIfError(err)
 
 			common.Logger.Debugf("key[%s] creationDate[%s]\n", k, index["creation_date"])
 
@@ -79,7 +79,7 @@ var esGetIndicesCmd = &cobra.Command{
 		if len(args) == 1 {
 			search = args
 		} else {
-			common.HandleError(errors.New("Provide search string"))
+			common.ExitIfError(errors.New("Provide search string"))
 		}
 		common.Logger.Debugf("Searching elasticsearch for [%s]", search)
 
@@ -91,7 +91,7 @@ var esGetIndicesCmd = &cobra.Command{
 		} else {
 			out, err = json.Marshal(indices)
 		}
-		common.HandleError(err)
+		common.ExitIfError(err)
 		fmt.Println(string(out))
 	},
 }

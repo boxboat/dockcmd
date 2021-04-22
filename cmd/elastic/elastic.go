@@ -51,7 +51,7 @@ func getEs6Client() *elasticsearch6.Client {
 		common.Logger.Debugf("ApiKey:[%s]", cfg.APIKey)
 		var err error
 		es6Client, err = elasticsearch6.NewClient(cfg)
-		common.HandleError(err)
+		common.ExitIfError(err)
 	}
 	return es6Client
 }
@@ -72,7 +72,7 @@ func getEs7Client() *elasticsearch7.Client {
 		common.Logger.Debugf("ApiKey:[%s]", cfg.APIKey)
 		var err error
 		es7Client, err = elasticsearch7.NewClient(cfg)
-		common.HandleError(err)
+		common.ExitIfError(err)
 	}
 	return es7Client
 }
@@ -81,15 +81,11 @@ func DeleteIndex(delete []string) {
 	if Version == "v6" {
 		esClient := getEs6Client()
 		_, err := esClient.Indices.Delete(delete)
-		if err != nil {
-			common.Logger.Warnf("%v", err)
-		}
+		common.LogIfError(err)
 	} else if Version == "v7" {
 		esClient := getEs7Client()
 		_, err := esClient.Indices.Delete(delete)
-		if err != nil {
-			common.Logger.Warnf("%v", err)
-		}
+		common.LogIfError(err)
 	}
 }
 
@@ -100,26 +96,28 @@ func FindIndices(search []string) map[string]interface{} {
 	if Version == "v6" {
 		esClient := getEs6Client()
 		response, err := esClient.Indices.Get(search)
-		common.HandleError(err)
+		common.ExitIfError(err)
 		if response.IsError() {
-			common.HandleError(
+			common.ExitIfError(
 				fmt.Errorf(
 					"error: %s",
 					response.String()))
 		}
-		json.NewDecoder(response.Body).Decode(&indices)
+		err = json.NewDecoder(response.Body).Decode(&indices)
+		common.ExitIfError(err)
 
 	} else if Version == "v7" {
 		esClient := getEs7Client()
 		response, err := esClient.Indices.Get(search)
-		common.HandleError(err)
+		common.ExitIfError(err)
 		if response.IsError() {
-			common.HandleError(
+			common.ExitIfError(
 				fmt.Errorf(
 					"error: %s",
 					response.String()))
 		}
-		json.NewDecoder(response.Body).Decode(&indices)
+		err = json.NewDecoder(response.Body).Decode(&indices)
+		common.ExitIfError(err)
 	}
 	return indices
 }
