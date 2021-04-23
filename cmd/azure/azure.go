@@ -23,6 +23,7 @@ import (
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/patrickmn/go-cache"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -72,7 +73,21 @@ func getKeyVaultClient() (keyvault.BaseClient, error) {
 }
 
 func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
-	common.Logger.Debugf("Retrieving [%s][%s]", secretName, secretKey)
+
+	adjustedSecretName := secretName
+	version := ""
+	s := strings.Split(adjustedSecretName, "?version=")
+	if len(s) > 1 {
+		version = s[1]
+		adjustedSecretName = s[0]
+	}
+
+	common.Logger.Debugf("Retrieving [%s][%s]", adjustedSecretName, secretKey)
+
+	// allow "latest" to specify the latest version
+	if version == "latest"{
+		version = ""
+	}
 
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
@@ -89,7 +104,8 @@ func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
 	secretResp, err := client.GetSecret(
 		context.Background(),
 		"https://"+KeyVaultName+".vault.azure.net",
-		secretName, "")
+		adjustedSecretName,
+		version)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +118,7 @@ func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
 	secretStr, ok := response[secretKey].(string)
 	if !ok {
 		return "", fmt.Errorf("could not convert Key Vault response[%s][%s] to string",
-			secretName,
+			adjustedSecretName,
 			secretKey)
 	}
 
@@ -112,7 +128,21 @@ func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
 }
 
 func GetAzureTextSecret(secretName string) (string, error) {
-	common.Logger.Debugf("GetAzureTextSecret [%s]", secretName)
+
+	adjustedSecretName := secretName
+	version := ""
+	s := strings.Split(adjustedSecretName, "?version=")
+	if len(s) > 1 {
+		version = s[1]
+		adjustedSecretName = s[0]
+	}
+
+	common.Logger.Debugf("GetAzureTextSecret [%s] ", adjustedSecretName)
+
+	// allow "latest" to specify the latest version
+	if version == "latest"{
+		version = ""
+	}
 
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s]", secretName)
@@ -129,7 +159,8 @@ func GetAzureTextSecret(secretName string) (string, error) {
 	secretResp, err := client.GetSecret(
 		context.Background(),
 		"https://"+KeyVaultName+".vault.azure.net",
-		secretName, "")
+		adjustedSecretName,
+		version)
 	if err != nil {
 		return "", err
 	}

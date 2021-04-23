@@ -21,6 +21,7 @@ import (
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/patrickmn/go-cache"
 	"google.golang.org/api/option"
+	"strings"
 	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
@@ -35,6 +36,8 @@ var (
 	SecretCache                      *cache.Cache
 	CacheTTL                         = 5 * time.Minute
 )
+
+const latestVersion = "latest"
 
 func init() {
 	SecretCache = cache.New(CacheTTL, CacheTTL)
@@ -61,7 +64,14 @@ func getClient() (*secretmanager.Client, error) {
 
 func GetJSONSecret(secretName string, secretKey string) (string, error) {
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", Project, secretName)
+	version := latestVersion
+	s := strings.Split(secretName, "?version=")
+	if len(s) > 1 {
+		version = s[1]
+		secretName = s[0]
+	}
+
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", Project, secretName, version)
 
 	common.Logger.Debugf("Retrieving [%s][%s]", projectSecretName, secretKey)
 
@@ -108,7 +118,14 @@ func GetJSONSecret(secretName string, secretKey string) (string, error) {
 
 func GetTextSecret(secretName string) (string, error) {
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", Project, secretName)
+	version := latestVersion
+	s := strings.Split(secretName, "?version=")
+	if len(s) > 1 {
+		version = s[1]
+		secretName = s[0]
+	}
+
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", Project, secretName, version)
 
 	common.Logger.Debugf("Retrieving [%s]", projectSecretName)
 

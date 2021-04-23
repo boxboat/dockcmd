@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/patrickmn/go-cache"
+	"strings"
 	"time"
 )
 
@@ -41,6 +42,8 @@ var (
 	SecretCache          *cache.Cache
 	CacheTTL             = 5 * time.Minute
 )
+
+const latestVersion = "AWSCURRENT"
 
 func init() {
 	SecretCache = cache.New(CacheTTL, CacheTTL)
@@ -111,7 +114,24 @@ func getAwsSecretsManagerClient() (*secretsmanager.SecretsManager, error) {
 }
 
 func GetAwsSecret(secretName string, secretKey string) (string, error) {
-	common.Logger.Debugf("Retrieving %s", secretName)
+	adjustedSecretName := secretName
+	version := latestVersion
+	s := strings.Split(adjustedSecretName, "?version=")
+	if len(s) > 1 {
+		version = s[1]
+		adjustedSecretName = s[0]
+	}
+
+	input := &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(adjustedSecretName),
+	}
+	if version == latestVersion || version == "latest"{
+		input.VersionStage = aws.String(latestVersion)
+	} else {
+		input.VersionId = aws.String(version)
+	}
+
+	common.Logger.Debugf("Retrieving %s", adjustedSecretName)
 
 	if val, ok := SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
@@ -125,12 +145,8 @@ func GetAwsSecret(secretName string, secretKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	input := &secretsmanager.GetSecretValueInput{
-		SecretId:     aws.String(secretName),
-		VersionStage: aws.String("AWSCURRENT"), // VersionStage defaults to AWSCURRENT if unspecified
-	}
 
-	common.Logger.Debugf("Retrieving [%s] from AWS Secrets Manager", secretName)
+	common.Logger.Debugf("Retrieving [%s] from AWS Secrets Manager", adjustedSecretName)
 	result, err := svc.GetSecretValue(input)
 
 	if err != nil {
@@ -139,31 +155,31 @@ func GetAwsSecret(secretName string, secretKey string) (string, error) {
 			switch aerr.Code() {
 			case secretsmanager.ErrCodeDecryptionFailure:
 				// Secrets Manager can't decrypt the protected secret text using the provided KMS key.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeDecryptionFailure, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", adjustedSecretName, secretKey, secretsmanager.ErrCodeDecryptionFailure, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeInternalServiceError:
 				// An error occurred on the server side.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeInternalServiceError, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", adjustedSecretName, secretKey, secretsmanager.ErrCodeInternalServiceError, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeInvalidParameterException:
 				// You provided an invalid value for a parameter.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeInvalidParameterException, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", adjustedSecretName, secretKey, secretsmanager.ErrCodeInvalidParameterException, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeInvalidRequestException:
 				// You provided a parameter value that is not valid for the current state of the resource.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeInvalidRequestException, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", adjustedSecretName, secretKey, secretsmanager.ErrCodeInvalidRequestException, aerr.Error())
 				break
 
 			case secretsmanager.ErrCodeResourceNotFoundException:
 				// We can't find the resource that you asked for.
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", secretName, secretKey, secretsmanager.ErrCodeResourceNotFoundException, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v %v", adjustedSecretName, secretKey, secretsmanager.ErrCodeResourceNotFoundException, aerr.Error())
 				break
 
 			default:
-				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v", secretName, secretKey, aerr.Error())
+				errorMessage = fmt.Sprintf("secret{%s[%s]}: %v", adjustedSecretName, secretKey, aerr.Error())
 				break
 			}
 		} else {
@@ -179,7 +195,7 @@ func GetAwsSecret(secretName string, secretKey string) (string, error) {
 		secretString = *result.SecretString
 	}
 
-	common.Logger.Debugf("Secret %s:%s", secretName, secretString)
+	common.Logger.Debugf("Secret %s:%s", adjustedSecretName, secretString)
 	var response map[string]interface{}
 	if err = json.Unmarshal([]byte(secretString), &response); err != nil {
 		return "", err
@@ -188,7 +204,7 @@ func GetAwsSecret(secretName string, secretKey string) (string, error) {
 	secretStr, ok := response[secretKey].(string)
 	if !ok {
 		return "", fmt.Errorf("could not convert secrets manager response[%s][%s] to string",
-			secretName,
+			adjustedSecretName,
 			secretKey)
 	}
 	_ = SecretCache.Add(secretName, response, cache.DefaultExpiration)
