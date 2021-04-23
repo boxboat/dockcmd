@@ -77,10 +77,10 @@ keyD: {{ (azureText "root" ) | quote }}
 <secret-values.yaml>
 ---
 foo:
-  keyA: '<value-of-secret/foo-a-frome-azure-key-vault>'
-  keyB: '<value-of-secret/foo-b-frome-azure-key-vault>'
+  keyA: '<value-of-secret/foo-a-from-azure-key-vault>'
+  keyB: '<value-of-secret/foo-b-from-azure-key-vault>'
   charlie:
-    keyC: '<value-of-secret/foo-charlie-c-frome-azure-key-vault>'
+    keyC: '<value-of-secret/foo-charlie-c-from-azure-key-vault>'
 keyD: "<value-of-secret/root-from-azure-key-vault>"
 ...
 `,
