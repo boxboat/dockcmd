@@ -21,8 +21,6 @@ import (
 	"text/template"
 )
 
-
-
 // gcpCmdPersistentPreRunE checks required persistent tokens for gcpCmd
 func gcpCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	if err := rootCmdPersistentPreRunE(cmd, args); err != nil {
@@ -30,10 +28,10 @@ func gcpCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	}
 	common.Logger.Debugln("gcpCmdPersistentPreRunE")
 
-
 	if gcp.CredentialsFile != "" {
-		// set to false in case where credentials are provided
 		gcp.UseApplicationDefaultCredentials = false
+	} else {
+		gcp.UseApplicationDefaultCredentials = true
 	}
 
 	return nil

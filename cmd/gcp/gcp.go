@@ -31,6 +31,7 @@ import (
 var (
 	Project                          string
 	CredentialsFile                  string
+	CredentialsJson                  []byte
 	UseApplicationDefaultCredentials bool
 	Client                           *secretmanager.Client
 	SecretCache                      *cache.Cache
@@ -48,15 +49,25 @@ func getClient() (*secretmanager.Client, error) {
 		ctx := context.Background()
 		var err error
 		if UseApplicationDefaultCredentials {
+			common.Logger.Debugf("using ADC for client authentication")
 			Client, err = secretmanager.NewClient(ctx)
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			Client, err = secretmanager.NewClient(ctx, option.WithCredentialsFile(CredentialsFile))
+		} else if CredentialsFile != "" {
+				common.Logger.Debugf("using credentials file[%s] for client authentication", CredentialsFile)
+				Client, err = secretmanager.NewClient(ctx, option.WithCredentialsFile(CredentialsFile))
+				if err != nil {
+					return nil, err
+				}
+		} else if len(CredentialsJson) > 0 {
+			common.Logger.Debugf("using credentials json for client authentication")
+			Client, err = secretmanager.NewClient(ctx, option.WithCredentialsJSON(CredentialsJson))
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			return nil, fmt.Errorf("unknown GCP authentication method provided, please use ADC or JSON authentication methods")
 		}
 	}
 	return Client, nil
