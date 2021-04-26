@@ -21,6 +21,7 @@ import (
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/patrickmn/go-cache"
 	"google.golang.org/api/option"
+	"strings"
 	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
@@ -30,11 +31,14 @@ import (
 var (
 	Project                          string
 	CredentialsFile                  string
+	CredentialsJson                  []byte
 	UseApplicationDefaultCredentials bool
 	Client                           *secretmanager.Client
 	SecretCache                      *cache.Cache
 	CacheTTL                         = 5 * time.Minute
 )
+
+const latestVersion = "latest"
 
 func init() {
 	SecretCache = cache.New(CacheTTL, CacheTTL)
@@ -45,15 +49,25 @@ func getClient() (*secretmanager.Client, error) {
 		ctx := context.Background()
 		var err error
 		if UseApplicationDefaultCredentials {
+			common.Logger.Debugf("using ADC for client authentication")
 			Client, err = secretmanager.NewClient(ctx)
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			Client, err = secretmanager.NewClient(ctx, option.WithCredentialsFile(CredentialsFile))
+		} else if CredentialsFile != "" {
+				common.Logger.Debugf("using credentials file[%s] for client authentication", CredentialsFile)
+				Client, err = secretmanager.NewClient(ctx, option.WithCredentialsFile(CredentialsFile))
+				if err != nil {
+					return nil, err
+				}
+		} else if len(CredentialsJson) > 0 {
+			common.Logger.Debugf("using credentials json for client authentication")
+			Client, err = secretmanager.NewClient(ctx, option.WithCredentialsJSON(CredentialsJson))
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			return nil, fmt.Errorf("unknown GCP authentication method provided, please use ADC or JSON authentication methods")
 		}
 	}
 	return Client, nil
@@ -61,7 +75,14 @@ func getClient() (*secretmanager.Client, error) {
 
 func GetJSONSecret(secretName string, secretKey string) (string, error) {
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", Project, secretName)
+	version := latestVersion
+	s := strings.Split(secretName, "?version=")
+	if len(s) > 1 {
+		version = s[1]
+		secretName = s[0]
+	}
+
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", Project, secretName, version)
 
 	common.Logger.Debugf("Retrieving [%s][%s]", projectSecretName, secretKey)
 
@@ -108,7 +129,14 @@ func GetJSONSecret(secretName string, secretKey string) (string, error) {
 
 func GetTextSecret(secretName string) (string, error) {
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", Project, secretName)
+	version := latestVersion
+	s := strings.Split(secretName, "?version=")
+	if len(s) > 1 {
+		version = s[1]
+		secretName = s[0]
+	}
+
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", Project, secretName, version)
 
 	common.Logger.Debugf("Retrieving [%s]", projectSecretName)
 

@@ -27,7 +27,7 @@ Retrieve secrets stored as JSON from AWS Secrets Manager. Input files are define
 `dockcmd aws get-secrets --region us-east-1 --set TargetEnv=prod --input-file secret-values.yaml`
 
 `secret-values.yaml`:
-```
+```yaml
 ---
 foo:
   keyA: {{ (aws (printf "%s-%s" .TargetEnv "foo") "a") | squote }}
@@ -38,7 +38,7 @@ keyD: {{ (aws "root" "d") | quote }}
 ```
 
 output:
-```
+```yaml
 foo:
   keyA: '<value-of-secret/foo-prod-a-from-aws-secrets-manager>'
   keyB: '<value-of-secret/foo-prod-b-from-aws-secrets-manager>'
@@ -46,6 +46,21 @@ foo:
     keyC: '<value-of-secret/foo-charlie-c-from-aws-secrets-manager>'
 keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 ```
+
+Optionally, if you desire to retrieve a specific version of secret from AWS Secrets Manager you can append `?version=UID` or `?version=latest` to the secret name above, for example:
+```yaml
+---
+---
+foo:
+  keyA: {{ (aws (printf "%s-%s?version="be70653b-f0d8-47ee-8785-8cbb5be463f8" .TargetEnv "foo") "a") | squote }}
+  keyB: {{ (aws (printf "%s-%s?version=latest" .TargetEnv "foo") "b") | squote }}
+  charlie:
+    keyC: {{ (aws "foo" "c") | squote }}
+keyD: {{ (aws "root" "d") | quote }}
+```
+
+Note if you need to find the versions UID you can use the AWS CLI `aws secretmanager list-secret-version-ids --secret-id foo`
+
 ***
 ## `azure`
 
@@ -71,7 +86,7 @@ Secrets can be stored in Azure Key Vault either as plain text or as a json paylo
 `dockcmd azure get-secrets --set TargetEnv=prod --input-file secret-values.yaml`
 
 `secret-values.yaml`:
-```
+```yaml
 ---
 foo:
   keyA: {{ (azureJson "foo" "a") | squote }}
@@ -82,13 +97,24 @@ keyD: {{ (azureText "root" ) | quote }}
 ```
 
 output:
-```
+```yaml
 foo:
   keyA: '<value-of-secret/foo-a-from-azure-key-vault>'
   keyB: '<value-of-secret/foo-b-from-azure-key-vault>'
   charlie:
     keyC: '<value-of-secret/foo-charlie-c-from-azure-key-vault>'
 keyD: "<value-of-secret/root-from-azure-key-vault>"
+```
+
+Optionally, if you desire to retrieve a specific version of secret from Azure Key Vault you can append `?version=ID` or `?version=latest` to the secret name above, for example:
+```yaml
+---
+foo:
+  keyA: {{ (azureJson "foo?version=latest" "a") | squote }}
+  keyB: {{ (azureJson "foo?version=d98097e7bbe04f67ba0846b511936d2d" "b") | squote }}
+  charlie:
+    keyC: {{ (azureJson "foo-charlie" "c") | squote }}
+keyD: {{ (azureText "root" ) | quote }}
 ```
 
 ***
@@ -114,7 +140,7 @@ Secrets can be stored in GCP Secrets Manager either as plain text or as a json p
 `dockcmd gcp get-secrets --project my-project --set TargetEnv=prod --input-file secret-values.yaml`
 
 `secret-values.yaml`:
-```
+```yaml
 ---
 foo:
   keyA: {{ (gcpJson "foo" "a") | squote }}
@@ -125,13 +151,24 @@ keyD: {{ (gcpText "root" ) | quote }}
 ```
 
 output:
-```
+```yaml
 foo:
   keyA: '<value-of-secret/foo-a-from-gcp-secrets-manager>'
   keyB: '<value-of-secret/foo-b-from-gcp-secrets-manager>'
   charlie:
     keyC: '<value-of-secret/foo-charlie-c-from-gcp-secrets-manager>'
-keyD: "<value-of-secret/root-rom-gcp-secrets-manager>"
+keyD: "<value-of-secret/root-from-gcp-secrets-manager>"
+```
+
+Optionally, if you desire to retrieve a specific version of secret from GCP Secrets manager you can append `?version=X` or `?version=latest` to the secret name above, for example:
+```yaml
+---
+foo:
+  keyA: {{ (gcpJson "foo?version=1" "a") | squote }}
+  keyB: {{ (gcpJson "foo?version=latest" "b") | squote }}
+  charlie:
+    keyC: {{ (gcpJson "foo-charlie?version=2" "c") | squote }}
+keyD: {{ (gcpText "root" ) | quote }}
 ```
 
 ***
@@ -185,7 +222,7 @@ Retrieve secrets from Vault `v1` or `v2` KV Secrets Engines. Input files are def
 `dockcmd vault get-secrets --vault-addr https://vault --set TargetEnv=prod --input-file secret-values.yaml`
 
 `secret-values.yaml`:
-```
+```yaml
 ---
 foo:
   keyA: {{ (vault "secret/foo" "a") | squote }}
@@ -196,11 +233,22 @@ keyD: {{ (vault "secret/root" "d") | quote }}
 ```
 
 output:
-```
+```yaml
 foo:
   keyA: '<value-of-secret/foo-a-from-vault>'
   keyB: '<value-of-secret/foo-b-from-vault>'
   charlie:
     keyC: '<value-of-secret/foo/prod/charlie-c-from-vault>'
 keyD: "<value-of-secret/root-d-from-vault>"
+```
+
+Optionally, if you desire to retrieve a specific version of secret from Vault V2 Secret Store you can append `?version=X` or `?version=latest` to the secret name above, for example:
+```yaml
+---
+foo:
+  keyA: {{ (vault "foo?version=1" "a") | squote }}
+  keyB: {{ (vault "foo?version=latest" "b") | squote }}
+  charlie:
+    keyC: {{ (vault (printf "%s/%s/%s" "secret/foo" .TargetEnv "charlie") "c") | squote }}
+keyD: {{ (vault "secret/root" "d") | quote }}
 ```

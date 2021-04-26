@@ -20,6 +20,8 @@ import (
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/hashicorp/vault/api"
 	"github.com/patrickmn/go-cache"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -79,6 +81,14 @@ func getVaultClient() (*api.Client, error){
 
 func GetVaultSecret(path string, key string) (string, error) {
 
+	secretPath := path
+	version := ""
+	s := strings.Split(secretPath, "?version=")
+	if len(s) > 1 {
+		secretPath = s[0]
+		version = s[1]
+	}
+
 	if val, ok := SecretCache.Get(path); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", path, key)
 		secretStr, ok := val.(map[string]interface{})[key].(string)
@@ -87,7 +97,11 @@ func GetVaultSecret(path string, key string) (string, error) {
 		}
 	}
 
-	common.Logger.Debugf("Reading secret[%s] key[%s]", path, key)
+	if version == "latest" {
+		version = ""
+	}
+
+	common.Logger.Debugf("Reading secret[%s] key[%s]", secretPath, key)
 
 	secretStr := ""
 	ok := false
@@ -97,14 +111,17 @@ func GetVaultSecret(path string, key string) (string, error) {
 		return "", err
 	}
 
-	mountPath, v2, err := isKVv2(path, client)
+	mountPath, v2, err := isKVv2(secretPath, client)
 	if err != nil {
 		return "", err
 	}
 	if v2 {
-		queryPath := addPrefixToVKVPath(path, mountPath, "data")
-		// make empty query for ReadWithData (always retrieve latest secret from v2 kv store)
-		query := make(map[string][]string)
+		queryPath := addPrefixToVKVPath(secretPath, mountPath, "data")
+		// make empty query for ReadWithData
+		query := url.Values{}
+		if version != "" {
+			query.Add("version", version)
+		}
 		client, err := getVaultClient()
 		if err != nil {
 			return "", err
@@ -118,12 +135,12 @@ func GetVaultSecret(path string, key string) (string, error) {
 		}
 		if !ok {
 			return "", fmt.Errorf("could not convert vault response [%s][%s] to string",
-					path,
+				secretPath,
 					key)
 		}
 		_ = SecretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
 	} else {
-		secret, err := client.Logical().Read(path)
+		secret, err := client.Logical().Read(secretPath)
 		if err != nil {
 			return "", err
 		}
@@ -132,7 +149,7 @@ func GetVaultSecret(path string, key string) (string, error) {
 		}
 		if !ok {
 			return "", fmt.Errorf("could not convert vault response [%s][%s] to string",
-					path,
+				secretPath,
 					key)
 		}
 		_ = SecretCache.Add(path, secret.Data, cache.DefaultExpiration)
