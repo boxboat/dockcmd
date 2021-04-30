@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2021 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,9 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"sigs.k8s.io/yaml"
 	"strings"
 	"text/template"
-
-	"sigs.k8s.io/yaml"
 
 	"github.com/Masterminds/sprig/v3"
 	log "github.com/sirupsen/logrus"
@@ -118,8 +117,8 @@ func AddValuesFileSupport(cmd *cobra.Command, p *[]string) {
 		"values file.yaml (can specify multiple times to set multiple values)")
 }
 
-// CommonGetSecrets process get-secrets request.
-func CommonGetSecrets(files []string, funcMap template.FuncMap) {
+// GetSecrets process get-secrets request.
+func GetSecrets(files []string, funcMap template.FuncMap) error {
 
 	var data []byte
 	var err error
@@ -128,28 +127,41 @@ func CommonGetSecrets(files []string, funcMap template.FuncMap) {
 		Logger.Debugf("Processing files: " + strings.Join(files, ","))
 		for _, file := range files {
 			data, err = ReadFileOrStdin(file)
-			HandleError(err)
-			output := ParseSecretsTemplate(data, funcMap)
-			if EditInPlace {
-				err = WriteFileOrStdout(output, file)
-			} else {
-				err = WriteFileOrStdout(output, "")
+			if err != nil {
+				return err
 			}
-			HandleError(err)
+			if err := parseFile(data, funcMap); err != nil {
+				return err
+			}
 		}
 
 	} else {
 		data, err = ReadFileOrStdin(GetSecretsInputFile)
-		HandleError(err)
-		output := ParseSecretsTemplate(data, funcMap)
-		if EditInPlace {
-			err = WriteFileOrStdout(output, GetSecretsInputFile)
-		} else {
-			err = WriteFileOrStdout(output, GetSecretsOutputFile)
+		if err != nil {
+			return err
 		}
-		HandleError(err)
+		return parseFile(data, funcMap)
 	}
+	return nil
 }
+
+func parseFile(data []byte, funcMap template.FuncMap) error {
+	output, err := ParseSecretsTemplate(data, funcMap)
+	if err != nil {
+		return err
+	}
+	if EditInPlace {
+		if err := WriteFileOrStdout(output, GetSecretsInputFile); err != nil {
+			return err
+		}
+	} else {
+		if err := WriteFileOrStdout(output, GetSecretsOutputFile); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 
 // ReadSetValues will add all of the values passed in with --set and store the
 // values in ValuesMap.
@@ -157,8 +169,9 @@ func ReadSetValues() error {
 	Logger.Debugf("ReadSetValues")
 	for _, v := range Values {
 		Logger.Debugf("parsing [%s]", v)
-		err := strvals.ParseInto(v, ValuesMap)
-		HandleError(err)
+		if err := strvals.ParseInto(v, ValuesMap); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -167,10 +180,13 @@ func ReadValuesFiles() error {
 	Logger.Debugf("ReadValuesFiles")
 	for _, f := range ValuesFiles {
 		currentValues := map[string]interface{}{}
-		bytes, err := readFile(f)
-		HandleError(err)
-		err = yaml.Unmarshal(bytes, &currentValues)
-		HandleError(err)
+		b, err := readFile(f)
+		if err != nil {
+			return err
+		}
+		if err := yaml.Unmarshal(b, &currentValues); err != nil {
+			return err
+		}
 		ValuesMap = mergeMaps(ValuesMap, currentValues)
 	}
 	return nil
@@ -208,7 +224,7 @@ func urlEncode(s string) string {
 }
 
 // ParseSecretsTemplate uses the provided funcMap to parse secrets.
-func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
+func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) ([]byte, error) {
 	Logger.Debugf("Parsing Template:\n%s", string(data))
 
 	// setup go template delimiters
@@ -237,10 +253,11 @@ func ParseSecretsTemplate(data []byte, funcMap template.FuncMap) []byte {
 	var tplOut bytes.Buffer
 
 	Logger.Debugf("Using Values:\n%s", ValuesMap)
-	err := tpl.Execute(&tplOut, ValuesMap)
-	HandleError(err)
+	if err := tpl.Execute(&tplOut, ValuesMap); err != nil {
+		return nil, err
+	}
 
-	return tplOut.Bytes()
+	return tplOut.Bytes(), nil
 }
 
 // ReadFileOrStdin will read from stdin if "-" is passed as input string
@@ -265,12 +282,18 @@ func WriteFileOrStdout(data []byte, output string) error {
 	return nil
 }
 
-// HandleError will generically handle an error by logging its contents
+// ExitIfError will generically handle an error by logging its contents
 // and exiting with a return code of 1.
-func HandleError(err error) {
+func ExitIfError(err error) {
 	if err != nil {
-		Logger.Errorf("%s", err)
+		Logger.Errorf("%v", err)
 		os.Exit(1)
+	}
+}
+
+func LogIfError(err error) {
+	if err != nil {
+		Logger.Warnf("%v", err)
 	}
 }
 

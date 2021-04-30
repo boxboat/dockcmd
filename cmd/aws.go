@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2021 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,13 +99,14 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 			files = args
 		}
 
-		common.CommonGetSecrets(files, funcMap)
+		err := common.GetSecrets(files, funcMap)
+		common.ExitIfError(err)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		common.Logger.Debug("PreRunE")
-		common.HandleError(common.ReadValuesFiles())
-		common.HandleError(common.ReadSetValues())
+		common.ExitIfError(common.ReadValuesFiles())
+		common.ExitIfError(common.ReadSetValues())
 		return nil
 	},
 }
@@ -157,5 +158,4 @@ func init() {
 	common.AddInputFileSupport(awsGetSecretsCmd, &common.GetSecretsInputFile)
 	common.AddOutputFileSupport(awsGetSecretsCmd, &common.GetSecretsOutputFile)
 
-	aws.SecretCache = make(map[string]map[string]interface{})
 }

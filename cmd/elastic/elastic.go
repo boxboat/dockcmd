@@ -1,3 +1,17 @@
+// Copyright © 2021 BoxBoat engineering@boxboat.com
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package elastic
 
 import (
@@ -37,7 +51,7 @@ func getEs6Client() *elasticsearch6.Client {
 		common.Logger.Debugf("ApiKey:[%s]", cfg.APIKey)
 		var err error
 		es6Client, err = elasticsearch6.NewClient(cfg)
-		common.HandleError(err)
+		common.ExitIfError(err)
 	}
 	return es6Client
 }
@@ -58,7 +72,7 @@ func getEs7Client() *elasticsearch7.Client {
 		common.Logger.Debugf("ApiKey:[%s]", cfg.APIKey)
 		var err error
 		es7Client, err = elasticsearch7.NewClient(cfg)
-		common.HandleError(err)
+		common.ExitIfError(err)
 	}
 	return es7Client
 }
@@ -67,15 +81,11 @@ func DeleteIndex(delete []string) {
 	if Version == "v6" {
 		esClient := getEs6Client()
 		_, err := esClient.Indices.Delete(delete)
-		if err != nil {
-			common.Logger.Warnf("%v", err)
-		}
+		common.LogIfError(err)
 	} else if Version == "v7" {
 		esClient := getEs7Client()
 		_, err := esClient.Indices.Delete(delete)
-		if err != nil {
-			common.Logger.Warnf("%v", err)
-		}
+		common.LogIfError(err)
 	}
 }
 
@@ -86,26 +96,28 @@ func FindIndices(search []string) map[string]interface{} {
 	if Version == "v6" {
 		esClient := getEs6Client()
 		response, err := esClient.Indices.Get(search)
-		common.HandleError(err)
+		common.ExitIfError(err)
 		if response.IsError() {
-			common.HandleError(
+			common.ExitIfError(
 				fmt.Errorf(
 					"error: %s",
 					response.String()))
 		}
-		json.NewDecoder(response.Body).Decode(&indices)
+		err = json.NewDecoder(response.Body).Decode(&indices)
+		common.ExitIfError(err)
 
 	} else if Version == "v7" {
 		esClient := getEs7Client()
 		response, err := esClient.Indices.Get(search)
-		common.HandleError(err)
+		common.ExitIfError(err)
 		if response.IsError() {
-			common.HandleError(
+			common.ExitIfError(
 				fmt.Errorf(
 					"error: %s",
 					response.String()))
 		}
-		json.NewDecoder(response.Body).Decode(&indices)
+		err = json.NewDecoder(response.Body).Decode(&indices)
+		common.ExitIfError(err)
 	}
 	return indices
 }

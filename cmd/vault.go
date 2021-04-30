@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2021 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ var vaultCmd = &cobra.Command{
 	Long:              `Commands designed to facilitate interactions with Hashicorp Vault`,
 	PersistentPreRunE: vaultCmdPersistentPreRunE,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
@@ -105,13 +105,14 @@ keyD: "<value-of-secret/root-d-from-vault>"
 			files = args
 		}
 
-		common.CommonGetSecrets(files, funcMap)
+		err := common.GetSecrets(files, funcMap)
+		common.ExitIfError(err)
 
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		common.Logger.Debug("PreRunE")
-		common.HandleError(common.ReadValuesFiles())
-		common.HandleError(common.ReadSetValues())
+		common.ExitIfError(common.ReadValuesFiles())
+		common.ExitIfError(common.ReadSetValues())
 		return nil
 	},
 	Args: cobra.MinimumNArgs(0),
@@ -150,10 +151,10 @@ func init() {
 		"",
 		"Vault Secret Id if not using vault-token can alternatively be set using ${VAULT_SECRET_ID} (also requires vault-role-id)")
 
-	viper.BindEnv("vault-token", "VAULT_TOKEN")
-	viper.BindEnv("vault-role-id", "VAULT_ROLE_ID")
-	viper.BindEnv("vault-secret-id", "VAULT_SECRET_ID")
-	viper.BindPFlags(vaultCmd.PersistentFlags())
+	_ = viper.BindEnv("vault-token", "VAULT_TOKEN")
+	_ = viper.BindEnv("vault-role-id", "VAULT_ROLE_ID")
+	_ = viper.BindEnv("vault-secret-id", "VAULT_SECRET_ID")
+	_ = viper.BindPFlags(vaultCmd.PersistentFlags())
 
 	common.AddSetValuesSupport(vaultGetSecretsCmd, &common.Values)
 	common.AddValuesFileSupport(vaultGetSecretsCmd, &common.ValuesFiles)
@@ -163,5 +164,4 @@ func init() {
 	common.AddInputFileSupport(vaultGetSecretsCmd, &common.GetSecretsInputFile)
 	common.AddOutputFileSupport(vaultGetSecretsCmd, &common.GetSecretsOutputFile)
 
-	vault.SecretCache = make(map[string]map[string]interface{})
 }
