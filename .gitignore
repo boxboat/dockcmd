@@ -3,3 +3,5 @@ dockcmd
 .idea
 /local-test
 *.json
+.vscode/
+bin
