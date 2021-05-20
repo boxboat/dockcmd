@@ -1,6 +1,6 @@
 module github.com/boxboat/dockcmd
 
-go 1.15
+go 1.16
 
 require (
 	cloud.google.com/go v0.81.0
@@ -19,11 +19,10 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/sirupsen/logrus v1.7.0
-	github.com/spf13/cobra v1.1.1
+	github.com/spf13/cobra v1.1.3
 	github.com/spf13/viper v1.7.1
 	google.golang.org/api v0.43.0
 	google.golang.org/genproto v0.0.0-20210421164718-3947dc264843
 	helm.sh/helm/v3 v3.3.0
 	sigs.k8s.io/yaml v1.2.0
-
 )
