@@ -12,7 +12,7 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 OSES ?= linux darwin windows
 ARCHES ?= amd64 arm64
-PLATFORM_FILTERS ?= windows/arm64
+PLATFORM_FILTERS ?= windows-arm64
 DOCKER_PLATFORM_FILTERS ?= windows/% darwin/%
 RELEASE_TARGET_FILTERS ?= $(foreach filter, $(PLATFORM_FILTERS), release-$(subst /,-,$(filter)))
 RELEASE_TARGETS ?= $(strip $(filter-out $(RELEASE_TARGET_FILTERS), $(foreach arch, $(ARCHES), $(foreach os, $(OSES), release-$(os)-$(arch)))))
@@ -33,17 +33,17 @@ arch = $(word 3, $(target))
 build:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build \
 	-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
-	-o bin/dockcmd
+	-o bin/
 
 test:
 	CGO_ENABLED=0 go test $(PKGS)
 
 release: $(RELEASE_TARGETS)
 $(RELEASE_TARGETS):
-	mkdir -p ./release/$(os)/$(arch)/$(VERSION)
+	mkdir -p ./release/$(os)-$(arch)/$(VERSION)
 	GOOS=$(os) GOARCH=$(arch) CGO_ENABLED=0 go build \
-		-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
-		-o ./release/$(os)/$(arch)/$(VERSION)/$(BINARY)
+    	-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
+    	-o ./release/$(os)-$(arch)/$(VERSION)/
 
 docker:
 	docker buildx build \
