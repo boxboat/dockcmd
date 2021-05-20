@@ -1,5 +1,5 @@
 *
 !cmd/
-!main.go
+!dockcmd.go
 !go.*
 !Makefile
