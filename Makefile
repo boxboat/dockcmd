@@ -1,47 +1,59 @@
-PKGS := $(shell go list ./... | grep -v /vendor)
+comma := ,
+space := $(subst ,, )
 
-.PHONY: test
-test:
-	CGO_ENABLED=0 go test $(PKGS)
-
-BINARY := dockcmd
-VERSION := develop
-
-# for travis-ci builds
-ifdef TRAVIS_BRANCH
-VERSION := $(TRAVIS_BRANCH)
-endif
-
-# for tagged travis-ci builds
-ifdef TRAVIS_TAG
-VERSION := $(TRAVIS_TAG)
-endif
+BINARY ?= dockcmd
+VERSION ?= develop
+REGISTRY ?= docker.io
+DOCKER_TARGET ?= release
+PKGS ?= $(shell go list ./... | grep -v /vendor)
+DEBUG ?= false
+PROGRESS ?= plain
+GOOS ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
+OSES ?= linux darwin windows
+ARCHES ?= amd64 arm64
+PLATFORM_FILTERS ?= windows/arm64
+DOCKER_PLATFORM_FILTERS ?= windows/% darwin/%
+RELEASE_TARGET_FILTERS ?= $(foreach filter, $(PLATFORM_FILTERS), release-$(subst /,-,$(filter)))
+RELEASE_TARGETS ?= $(strip $(filter-out $(RELEASE_TARGET_FILTERS), $(foreach arch, $(ARCHES), $(foreach os, $(OSES), release-$(os)-$(arch)))))
+DOCKER_PLATFORMS ?= $(subst $(space),$(comma),$(strip $(filter-out $(DOCKER_PLATFORM_FILTERS), $(foreach arch, $(ARCHES), $(foreach os, $(OSES), $(os)/$(arch))))))
 
 ifdef CI_VERSION
 VERSION := $(CI_VERSION)
 endif
 
-DEBUG ?= false
-PLATFORMS := linux darwin
-os = $(word 1, $@)
+target = $(subst -,$(space),$(@))
+os = $(word 2, $(target))
+arch = $(word 3, $(target))
 
-.DEFAULT_GOAL := local
+.PHONY: build test release $(RELEASE_TARGETS) docker
 
-local: test
-	go build
+.DEFAULT_GOAL := build
 
-.PHONY: $(PLATFORMS)
-$(PLATFORMS):
-	mkdir -p release/$(os)-amd64/$(VERSION)
-	GOOS=$(os) GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/$(os)-amd64/$(VERSION)/$(BINARY)
+build:
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build \
+	-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
+	-o bin/dockcmd
 
-windows:
-	mkdir -p release/windows-amd64/$(VERSION)
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" -o release/windows-amd64/$(VERSION)/$(BINARY).exe
+test:
+	CGO_ENABLED=0 go test $(PKGS)
 
-.PHONY: release
-release: test windows linux darwin
+release: $(RELEASE_TARGETS)
+$(RELEASE_TARGETS):
+	mkdir -p ./release/$(os)/$(arch)/$(VERSION)
+	GOOS=$(os) GOARCH=$(arch) CGO_ENABLED=0 go build \
+		-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
+		-o ./release/$(os)/$(arch)/$(VERSION)/$(BINARY)
+
+docker:
+	docker buildx build \
+		--target $(DOCKER_TARGET) \
+		--platform $(DOCKER_PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
+		-t $(REGISTRY)/boxboat/$(BINARY):$(VERSION) \
+		--push \
+		--progress $(PROGRESS) \
+		.
 
 clean:
-	rm -rf release/*
-	rm -f $(BINARY)
+	rm -rf bin release
