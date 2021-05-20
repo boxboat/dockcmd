@@ -42,8 +42,8 @@ release: $(RELEASE_TARGETS)
 $(RELEASE_TARGETS):
 	mkdir -p ./release/$(os)-$(arch)/$(VERSION)
 	GOOS=$(os) GOARCH=$(arch) CGO_ENABLED=0 go build \
-    	-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
-    	-o ./release/$(os)-$(arch)/$(VERSION)/
+    		-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
+    		-o ./release/$(os)-$(arch)/$(VERSION)/
 
 docker:
 	docker buildx build \
