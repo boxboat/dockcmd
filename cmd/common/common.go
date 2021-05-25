@@ -130,8 +130,14 @@ func GetSecrets(files []string, funcMap template.FuncMap) error {
 			if err != nil {
 				return err
 			}
-			if err := parseFile(data, funcMap); err != nil {
-				return err
+			if EditInPlace {
+				if err :=  parseFile(data, funcMap, file); err != nil {
+					return err
+				}
+			} else {
+				if err := parseFile(data, funcMap, ""); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -140,24 +146,22 @@ func GetSecrets(files []string, funcMap template.FuncMap) error {
 		if err != nil {
 			return err
 		}
-		return parseFile(data, funcMap)
+		if EditInPlace {
+			return parseFile(data, funcMap, GetSecretsInputFile)
+		} else {
+			return parseFile(data, funcMap, GetSecretsOutputFile)
+		}
 	}
 	return nil
 }
 
-func parseFile(data []byte, funcMap template.FuncMap) error {
+func parseFile(data []byte, funcMap template.FuncMap, file string) error {
 	output, err := ParseSecretsTemplate(data, funcMap)
 	if err != nil {
 		return err
 	}
-	if EditInPlace {
-		if err := WriteFileOrStdout(output, GetSecretsInputFile); err != nil {
-			return err
-		}
-	} else {
-		if err := WriteFileOrStdout(output, GetSecretsOutputFile); err != nil {
-			return err
-		}
+	if err := WriteFileOrStdout(output, file); err != nil {
+		return err
 	}
 	return nil
 }
