@@ -18,63 +18,117 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/patrickmn/go-cache"
 	"google.golang.org/api/option"
-	"strings"
-	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 )
 
-var (
-	Project                          string
-	CredentialsFile                  string
-	CredentialsJson                  []byte
-	UseApplicationDefaultCredentials bool
-	Client                           *secretmanager.Client
-	SecretCache                      *cache.Cache
-	CacheTTL                         = 5 * time.Minute
-)
-
 const latestVersion = "latest"
 
-func init() {
-	SecretCache = cache.New(CacheTTL, CacheTTL)
+type SecretsManager struct {
+	ctx                  context.Context
+	SecretsManagerClient *secretmanager.Client
+	SecretCache          *cache.Cache
+	Project              string
 }
 
-func getClient() (*secretmanager.Client, error) {
-	if Client == nil {
-		ctx := context.Background()
-		var err error
-		if UseApplicationDefaultCredentials {
-			common.Logger.Debugf("using ADC for client authentication")
-			Client, err = secretmanager.NewClient(ctx)
-			if err != nil {
+type SecretsManagerOpt interface {
+	configureSecretsManager(opts *secretsManagerOpts) error
+}
+
+type secretsManagerOpts struct {
+	credentialsFile          string
+	credentialsJson          []byte
+	useAppDefaultCredentials bool
+	cacheTTL                 time.Duration
+}
+
+type secretManagerOptFn func(opts *secretsManagerOpts) error
+
+func (opt secretManagerOptFn) configureSecretsManager(opts *secretsManagerOpts) error {
+	return opt(opts)
+}
+
+func CredentialsFile(filename string) SecretsManagerOpt {
+	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+		opts.credentialsFile = filename
+		return nil
+	})
+}
+
+func CredentialsJson(jsonBytes []byte) SecretsManagerOpt {
+	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+		opts.credentialsJson = jsonBytes
+		return nil
+	})
+}
+
+func UseApplicationDefaultCredentials() SecretsManagerOpt {
+	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+		opts.useAppDefaultCredentials = true
+		return nil
+	})
+}
+
+func CacheTTL(ttl time.Duration) SecretsManagerOpt {
+	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+		opts.cacheTTL = ttl
+		return nil
+	})
+}
+
+func NewSecretsManagerClient(ctx context.Context, gcpProject string, opts ...SecretsManagerOpt) (*SecretsManager, error) {
+	var o secretsManagerOpts
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt.configureSecretsManager(&o); err != nil {
 				return nil, err
 			}
-		} else if CredentialsFile != "" {
-				common.Logger.Debugf("using credentials file[%s] for client authentication", CredentialsFile)
-				Client, err = secretmanager.NewClient(ctx, option.WithCredentialsFile(CredentialsFile))
-				if err != nil {
-					return nil, err
-				}
-		} else if len(CredentialsJson) > 0 {
-			common.Logger.Debugf("using credentials json for client authentication")
-			Client, err = secretmanager.NewClient(ctx, option.WithCredentialsJSON(CredentialsJson))
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, fmt.Errorf("unknown GCP authentication method provided, please use ADC or JSON authentication methods")
 		}
 	}
-	return Client, nil
+
+	client := &SecretsManager{
+		ctx:                  ctx,
+		SecretsManagerClient: nil,
+		SecretCache:          cache.New(o.cacheTTL, o.cacheTTL),
+		Project:              gcpProject,
+	}
+	if o.useAppDefaultCredentials {
+		common.Logger.Debugf("using ADC for client authentication")
+		c, err := secretmanager.NewClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+		client.SecretsManagerClient = c
+	} else if o.credentialsFile != "" {
+		common.Logger.Debugf("using credentials file[%s] for client authentication", o.credentialsFile)
+		c, err := secretmanager.NewClient(ctx, option.WithCredentialsFile(o.credentialsFile))
+		if err != nil {
+			return nil, err
+		}
+		client.SecretsManagerClient = c
+	} else if len(o.credentialsJson) > 0 {
+		common.Logger.Debugf("using credentials json for client authentication")
+		c, err := secretmanager.NewClient(ctx, option.WithCredentialsJSON(o.credentialsJson))
+		if err != nil {
+			return nil, err
+		}
+		client.SecretsManagerClient = c
+	} else {
+		return nil, fmt.Errorf("unknown GCP authentication method provided, please use ADC or JSON authentication methods")
+	}
+
+	return client, nil
+
 }
 
-func GetJSONSecret(secretName string, secretKey string) (string, error) {
-
+func (c *SecretsManager) GetJSONSecret(secretName, secretKey string) (string, error) {
 	version := latestVersion
 	s := strings.Split(secretName, "?version=")
 	if len(s) > 1 {
@@ -82,20 +136,15 @@ func GetJSONSecret(secretName string, secretKey string) (string, error) {
 		secretName = s[0]
 	}
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", Project, secretName, version)
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", c.Project, secretName, version)
 
 	common.Logger.Debugf("Retrieving [%s][%s]", projectSecretName, secretKey)
 
-	if val, ok := SecretCache.Get(projectSecretName); ok {
+	if val, ok := c.SecretCache.Get(projectSecretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", projectSecretName, secretKey)
 		if secretStr, ok := val.(map[string]interface{})[secretKey].(string); ok {
 			return secretStr, nil
 		}
-	}
-
-	client, err := getClient()
-	if err != nil {
-		return "", err
 	}
 
 	// Build the request.
@@ -104,7 +153,7 @@ func GetJSONSecret(secretName string, secretKey string) (string, error) {
 	}
 
 	// Call the API.
-	result, err := client.AccessSecretVersion(context.Background(), req)
+	result, err := c.SecretsManagerClient.AccessSecretVersion(c.ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret: %v", err)
 	}
@@ -121,14 +170,12 @@ func GetJSONSecret(secretName string, secretKey string) (string, error) {
 			secretKey)
 	}
 
-	_ = SecretCache.Add(projectSecretName, response, cache.DefaultExpiration)
+	_ = c.SecretCache.Add(projectSecretName, response, cache.DefaultExpiration)
 
 	return secretStr, nil
-
 }
 
-func GetTextSecret(secretName string) (string, error) {
-
+func (c *SecretsManager) GetTextSecret(secretName string) (string, error) {
 	version := latestVersion
 	s := strings.Split(secretName, "?version=")
 	if len(s) > 1 {
@@ -136,20 +183,15 @@ func GetTextSecret(secretName string) (string, error) {
 		secretName = s[0]
 	}
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", Project, secretName, version)
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", c.Project, secretName, version)
 
 	common.Logger.Debugf("Retrieving [%s]", projectSecretName)
 
-	if val, ok := SecretCache.Get(projectSecretName); ok {
+	if val, ok := c.SecretCache.Get(projectSecretName); ok {
 		common.Logger.Debugf("Using cached [%s]", projectSecretName)
 		if secretStr, ok := val.(string); ok {
 			return secretStr, nil
 		}
-	}
-
-	client, err := getClient()
-	if err != nil {
-		return "", err
 	}
 
 	// Build the request.
@@ -158,15 +200,14 @@ func GetTextSecret(secretName string) (string, error) {
 	}
 
 	// Call the API.
-	result, err := client.AccessSecretVersion(context.Background(), req)
+	result, err := c.SecretsManagerClient.AccessSecretVersion(context.Background(), req)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret: %v", err)
 	}
 
 	secretStr := string(result.Payload.Data)
 
-	_ = SecretCache.Add(projectSecretName, secretStr, cache.DefaultExpiration)
+	_ = c.SecretCache.Add(projectSecretName, secretStr, cache.DefaultExpiration)
 
 	return secretStr, nil
-
 }

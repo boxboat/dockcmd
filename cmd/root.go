@@ -15,9 +15,10 @@
 package cmd
 
 import (
-	"github.com/boxboat/dockcmd/cmd/common"
 	"os"
 	"strings"
+
+	"github.com/boxboat/dockcmd/cmd/common"
 
 	log "github.com/sirupsen/logrus"
 

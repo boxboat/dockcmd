@@ -18,15 +18,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/boxboat/dockcmd/cmd/elastic"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"strconv"
-	"time"
 )
-
-
 
 var esDeleteIndicesCmd = &cobra.Command{
 	Use:   "delete-indices",
