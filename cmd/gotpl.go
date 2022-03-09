@@ -15,9 +15,10 @@
 package cmd
 
 import (
+	"text/template"
+
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/spf13/cobra"
-	"text/template"
 )
 
 var gotplCmd = &cobra.Command{

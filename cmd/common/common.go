@@ -20,9 +20,11 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"sigs.k8s.io/yaml"
 	"strings"
 	"text/template"
+	"time"
+
+	"sigs.k8s.io/yaml"
 
 	"github.com/Masterminds/sprig/v3"
 	log "github.com/sirupsen/logrus"
@@ -39,6 +41,8 @@ const (
 	DefaultLeftDelim = "{{"
 	// DefaultRightDelim for go templating
 	DefaultRightDelim = "}}"
+	// DefaultCacheTTL secrets client default cache TTL
+	DefaultCacheTTL = 5 * time.Minute
 )
 
 var (
@@ -131,7 +135,7 @@ func GetSecrets(files []string, funcMap template.FuncMap) error {
 				return err
 			}
 			if EditInPlace {
-				if err :=  parseFile(data, funcMap, file); err != nil {
+				if err := parseFile(data, funcMap, file); err != nil {
 					return err
 				}
 			} else {
@@ -165,7 +169,6 @@ func parseFile(data []byte, funcMap template.FuncMap, file string) error {
 	}
 	return nil
 }
-
 
 // ReadSetValues will add all of the values passed in with --set and store the
 // values in ValuesMap.

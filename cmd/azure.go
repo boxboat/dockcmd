@@ -15,14 +15,22 @@
 package cmd
 
 import (
+	"text/template"
+
 	"github.com/boxboat/dockcmd/cmd/azure"
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"text/template"
 )
 
-
+var (
+	client        *azure.KeyVaultClient
+	clientID      string
+	clientSecret  string
+	tenantID      string
+	useAzCliLogin bool
+	keyVaultName  string
+)
 
 // azureRegionCmdPersistentPreRunE checks required persistent tokens for azureCmd
 func azureCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
@@ -31,13 +39,13 @@ func azureCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	}
 	common.Logger.Debugln("azureCmdPersistentPreRunE")
 
-	azure.TenantID = viper.GetString("tenant")
-	azure.ClientID = viper.GetString("client-id")
-	azure.ClientSecret = viper.GetString("client-secret")
+	tenantID = viper.GetString("tenant")
+	clientID = viper.GetString("client-id")
+	clientSecret = viper.GetString("client-secret")
 
-	if (azure.TenantID == "" && azure.ClientID == "" && azure.ClientSecret == "") || azure.UseAzCliLogin {
+	if (tenantID == "" && clientID == "" && clientSecret == "") || useAzCliLogin {
 		// set to true in case where no service principal credentials provided
-		azure.UseAzCliLogin = true
+		useAzCliLogin = true
 	}
 
 	return nil
@@ -87,10 +95,21 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
 
+		opts := []azure.KeyVaultOpt{azure.KeyVaultName(keyVaultName), azure.CacheTTL(common.DefaultCacheTTL)}
+
+		if useAzCliLogin {
+			opts = append(opts, azure.UseAzCliLogin())
+		} else {
+			opts = append(opts, azure.ClientIDAndSecret(clientID, clientSecret), azure.TenantID(tenantID))
+		}
+		var err error
+		client, err = azure.NewKeyVaultClient(opts...)
+		common.ExitIfError(err)
+
 		// create custom function map
 		funcMap := template.FuncMap{
-			"azureJson": azure.GetAzureJSONSecret,
-			"azureText": azure.GetAzureTextSecret,
+			"azureJson": client.GetJSONSecret,
+			"azureText": client.GetTextSecret,
 		}
 
 		var files []string
@@ -98,7 +117,7 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 			files = args
 		}
 
-		err := common.GetSecrets(files, funcMap)
+		err = common.GetSecrets(files, funcMap)
 		common.ExitIfError(err)
 
 	},
@@ -110,18 +129,26 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 	},
 }
 
+func GetJSON(secretName, secretKey string) (string, error) {
+	return client.GetJSONSecret(secretName, secretKey)
+}
+
+func GetText(secretName string) (string, error) {
+	return client.GetTextSecret(secretName)
+}
+
 func init() {
 	rootCmd.AddCommand(azureCmd)
 
 	// azure command and common persistent flags
 	azureCmd.AddCommand(azureGetSecretsCmd)
 	azureCmd.PersistentFlags().BoolVarP(
-		&azure.UseAzCliLogin, "az-cli-login",
+		&useAzCliLogin, "az-cli-login",
 		"",
 		false,
 		"access credentials provided by az login - default if tenant, client-id and client-secret are not set")
 	azureCmd.PersistentFlags().StringVarP(
-		&azure.TenantID,
+		&tenantID,
 		"tenant",
 		"",
 		"",
@@ -129,14 +156,14 @@ func init() {
 	_ = viper.BindEnv("tenant", "AZURE_TENANT_ID")
 
 	azureCmd.PersistentFlags().StringVarP(
-		&azure.ClientID,
+		&clientID,
 		"client-id",
 		"",
 		"",
 		"Azure Client ID can alternatively be set using ${AZURE_CLIENT_ID}")
 
 	azureCmd.PersistentFlags().StringVarP(
-		&azure.ClientSecret,
+		&clientSecret,
 		"client-secret",
 		"",
 		"",
@@ -148,7 +175,7 @@ func init() {
 	_ = viper.BindPFlags(azureCmd.PersistentFlags())
 
 	azureGetSecretsCmd.PersistentFlags().StringVarP(
-		&azure.KeyVaultName,
+		&keyVaultName,
 		"key-vault",
 		"",
 		"",
