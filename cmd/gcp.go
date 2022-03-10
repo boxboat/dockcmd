@@ -1,4 +1,4 @@
-// Copyright © 2021 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,16 @@
 package cmd
 
 import (
+	"text/template"
+
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/boxboat/dockcmd/cmd/gcp"
 	"github.com/spf13/cobra"
-	"text/template"
+)
+
+var (
+	credentialsFile string
+	project         string
 )
 
 // gcpCmdPersistentPreRunE checks required persistent tokens for gcpCmd
@@ -27,12 +33,6 @@ func gcpCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	common.Logger.Debugln("gcpCmdPersistentPreRunE")
-
-	if gcp.CredentialsFile != "" {
-		gcp.UseApplicationDefaultCredentials = false
-	} else {
-		gcp.UseApplicationDefaultCredentials = true
-	}
 
 	return nil
 }
@@ -81,10 +81,23 @@ keyD: "<value-of-secret/root-from-gcp-secrets-manager>"
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
 
+		opts := []gcp.SecretsClientOpt{
+			gcp.Project(project),
+			gcp.CacheTTL(common.DefaultCacheTTL)}
+
+		if credentialsFile != "" {
+			opts = append(opts, gcp.CredentialsFile(credentialsFile))
+		} else {
+			opts = append(opts, gcp.UseApplicationDefaultCredentials())
+		}
+
+		client, err := gcp.NewSecretsClient(cmd.Context(), opts...)
+		common.ExitIfError(err)
+
 		// create custom function map
 		funcMap := template.FuncMap{
-			"gcpJson": gcp.GetJSONSecret,
-			"gcpText": gcp.GetTextSecret,
+			"gcpJson": client.GetJSONSecret,
+			"gcpText": client.GetTextSecret,
 		}
 
 		var files []string
@@ -92,7 +105,7 @@ keyD: "<value-of-secret/root-from-gcp-secrets-manager>"
 			files = args
 		}
 
-		err := common.GetSecrets(files, funcMap)
+		err = common.GetSecrets(files, funcMap)
 		common.ExitIfError(err)
 
 	},
@@ -110,14 +123,14 @@ func init() {
 	// gcp command and common persistent flags
 	gcpCmd.AddCommand(gcpGetSecretsCmd)
 	gcpCmd.PersistentFlags().StringVarP(
-		&gcp.CredentialsFile,
+		&credentialsFile,
 		"credentials-file",
 		"",
 		"",
 		"GCP Credentials JSON File")
 
 	gcpCmd.PersistentFlags().StringVarP(
-		&gcp.Project,
+		&project,
 		"project",
 		"",
 		"",

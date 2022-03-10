@@ -1,4 +1,4 @@
-// Copyright © 2021 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,62 +18,117 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/keyvault/keyvault"
-	kvauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
-	"github.com/boxboat/dockcmd/cmd/common"
-	"github.com/patrickmn/go-cache"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/keyvault/keyvault"
+	"github.com/Azure/go-autorest/autorest/azure/auth"
+	"github.com/boxboat/dockcmd/cmd/common"
+	"github.com/patrickmn/go-cache"
 )
 
-var (
-	initialized    = false
-	TenantID       string
-	ClientID       string
-	ClientSecret   string
-	KeyVaultName   string
-	KeyVaultClient keyvault.BaseClient
-	SecretCache    *cache.Cache
-	UseAzCliLogin  = false
-	CacheTTL       = 5 * time.Minute
+const (
+	azurePublicKeyVault = "vault.azure.net"
+	keyVaultResource    = "https://" + azurePublicKeyVault
 )
 
-func init(){
-	SecretCache = cache.New(CacheTTL, CacheTTL)
+type SecretsClient struct {
+	common.SecretClient
+	keyVaultName string
+	keyVault     keyvault.BaseClient
+	SecretCache  *cache.Cache
 }
 
-func getKeyVaultClient() (keyvault.BaseClient, error) {
+type SecretsClientOpt interface {
+	configureSecretsClient(opts *secretsClientOpts) error
+}
 
-	if !initialized {
-		if UseAzCliLogin {
-			KeyVaultClient = keyvault.New()
-			authorizer, err := kvauth.NewAuthorizerFromCLI()
-			if err != nil {
-				return KeyVaultClient, err
-			}
-			KeyVaultClient.Authorizer = authorizer
-			initialized = true
-		} else {
-			// ensure required environment variables are set
-			_ = os.Setenv("AZURE_TENANT_ID", TenantID)
-			_ = os.Setenv("AZURE_CLIENT_ID", ClientID)
-			_ = os.Setenv("AZURE_CLIENT_SECRET", ClientSecret)
+type secretsClientOpts struct {
+	clientID      string
+	clientSecret  string
+	tenantID      string
+	keyVaultName  string
+	useAzCliLogin bool
+	cacheTTL      time.Duration
+}
 
-			KeyVaultClient = keyvault.New()
-			authorizer, err := kvauth.NewAuthorizerFromEnvironment()
-			if err != nil {
-				return KeyVaultClient, err
+type secretsClientOptFn func(opts *secretsClientOpts) error
+
+func CacheTTL(ttl time.Duration) SecretsClientOpt {
+	return secretsClientOptFn(func(opts *secretsClientOpts) error {
+		opts.cacheTTL = ttl
+		return nil
+	})
+}
+
+func KeyVaultName(keyVaultName string) SecretsClientOpt {
+	return secretsClientOptFn(func(opts *secretsClientOpts) error {
+		opts.keyVaultName = keyVaultName
+		return nil
+	})
+}
+
+func ClientIDAndSecret(clientID, clientSecret string) SecretsClientOpt {
+	return secretsClientOptFn(func(opts *secretsClientOpts) error {
+		opts.clientID = clientID
+		opts.clientSecret = clientSecret
+		return nil
+	})
+}
+
+func TenantID(tenantID string) SecretsClientOpt {
+	return secretsClientOptFn(func(opts *secretsClientOpts) error {
+		opts.tenantID = tenantID
+		return nil
+	})
+}
+
+func UseAzCliLogin() SecretsClientOpt {
+	return secretsClientOptFn(func(opts *secretsClientOpts) error {
+		opts.useAzCliLogin = true
+		return nil
+	})
+}
+
+func (opt secretsClientOptFn) configureSecretsClient(opts *secretsClientOpts) error {
+	return opt(opts)
+}
+
+func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
+	var o secretsClientOpts
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt.configureSecretsClient(&o); err != nil {
+				return nil, err
 			}
-			KeyVaultClient.Authorizer = authorizer
-			initialized = true
 		}
 	}
-	return KeyVaultClient, nil
+
+	client := &SecretsClient{
+		SecretCache:  cache.New(o.cacheTTL, o.cacheTTL),
+		keyVaultName: o.keyVaultName,
+	}
+	if o.useAzCliLogin {
+		client.keyVault = keyvault.New()
+		authorizer, err := auth.NewAuthorizerFromCLIWithResource(keyVaultResource)
+		if err != nil {
+			return nil, err
+		}
+		client.keyVault.Authorizer = authorizer
+	} else {
+		client.keyVault = keyvault.New()
+		clientConfig := auth.NewClientCredentialsConfig(o.clientID, o.clientSecret, o.tenantID)
+		clientConfig.Resource = keyVaultResource
+		authorizer, err := clientConfig.Authorizer()
+		if err != nil {
+			return nil, err
+		}
+		client.keyVault.Authorizer = authorizer
+	}
+	return client, nil
 }
 
-func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
-
+func (c *SecretsClient) GetJSONSecret(secretName string, secretKey string) (string, error) {
 	adjustedSecretName := secretName
 	version := ""
 	s := strings.Split(adjustedSecretName, "?version=")
@@ -82,28 +137,23 @@ func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
 		adjustedSecretName = s[0]
 	}
 
-	common.Logger.Debugf("Retrieving [%s][%s]", adjustedSecretName, secretKey)
-
 	// allow "latest" to specify the latest version
-	if version == "latest"{
+	if version == "latest" {
 		version = ""
 	}
 
-	if val, ok := SecretCache.Get(secretName); ok {
+	if val, ok := c.SecretCache.Get(secretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
 		if secretStr, ok := val.(map[string]interface{})[secretKey].(string); ok {
 			return secretStr, nil
 		}
 	}
 
-	client, err := getKeyVaultClient()
-	if err != nil {
-		return "", err
-	}
+	common.Logger.Debugf("retrieving [%s][%s] from Azure Key Vault", adjustedSecretName, secretKey)
 
-	secretResp, err := client.GetSecret(
+	secretResp, err := c.keyVault.GetSecret(
 		context.Background(),
-		"https://"+KeyVaultName+".vault.azure.net",
+		"https://"+c.keyVaultName+".vault.azure.net",
 		adjustedSecretName,
 		version)
 	if err != nil {
@@ -122,13 +172,12 @@ func GetAzureJSONSecret(secretName string, secretKey string) (string, error) {
 			secretKey)
 	}
 
-	_ = SecretCache.Add(secretName, response, cache.DefaultExpiration)
+	_ = c.SecretCache.Add(secretName, response, cache.DefaultExpiration)
 
 	return secretStr, nil
 }
 
-func GetAzureTextSecret(secretName string) (string, error) {
-
+func (c *SecretsClient) GetTextSecret(secretName string) (string, error) {
 	adjustedSecretName := secretName
 	version := ""
 	s := strings.Split(adjustedSecretName, "?version=")
@@ -137,28 +186,23 @@ func GetAzureTextSecret(secretName string) (string, error) {
 		adjustedSecretName = s[0]
 	}
 
-	common.Logger.Debugf("GetAzureTextSecret [%s] ", adjustedSecretName)
-
 	// allow "latest" to specify the latest version
-	if version == "latest"{
+	if version == "latest" {
 		version = ""
 	}
 
-	if val, ok := SecretCache.Get(secretName); ok {
-		common.Logger.Debugf("Using cached [%s]", secretName)
+	if val, ok := c.SecretCache.Get(secretName); ok {
+		common.Logger.Debugf("using cached [%s]", secretName)
 		if secretStr, ok := val.(string); ok {
 			return secretStr, nil
 		}
 	}
 
-	client, err := getKeyVaultClient()
-	if err != nil {
-		return "", err
-	}
+	common.Logger.Debugf("retrieving [%s] from Azure Key Vault", adjustedSecretName)
 
-	secretResp, err := client.GetSecret(
+	secretResp, err := c.keyVault.GetSecret(
 		context.Background(),
-		"https://"+KeyVaultName+".vault.azure.net",
+		"https://"+c.keyVaultName+"."+azurePublicKeyVault,
 		adjustedSecretName,
 		version)
 	if err != nil {
@@ -166,8 +210,7 @@ func GetAzureTextSecret(secretName string) (string, error) {
 	}
 	secretStr := *secretResp.Value
 
-	_ = SecretCache.Add(secretName, secretStr, cache.DefaultExpiration)
+	_ = c.SecretCache.Add(secretName, secretStr, cache.DefaultExpiration)
 
 	return secretStr, nil
-
 }

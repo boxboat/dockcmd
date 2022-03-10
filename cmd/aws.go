@@ -1,4 +1,4 @@
-// Copyright © 2021 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,21 @@ package cmd
 
 import (
 	"errors"
+	"text/template"
+
 	"github.com/boxboat/dockcmd/cmd/aws"
 	"github.com/boxboat/dockcmd/cmd/common"
-	"text/template"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+)
+
+var (
+	region              string
+	profile             string
+	accessKeyID         string
+	secretAccessKey     string
+	useChainCredentials bool
 )
 
 // awsRegionCmdPersistentPreRunE checks required persistent tokens for awsCmd
@@ -30,16 +39,16 @@ func awsCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	common.Logger.Debugln("awsCmdPersistentPreRunE")
-	aws.Region = viper.GetString("region")
-	common.Logger.Debugf("Using AWS Region: {%s}", aws.Region)
-	if aws.Region == "" {
+	region = viper.GetString("region")
+	common.Logger.Debugf("Using AWS Region: {%s}", region)
+	if region == "" {
 		return errors.New("${AWS_DEFAULT_REGION} must be set or passed in via --region")
 	}
-	aws.AccessKeyID = viper.GetString("access-key-id")
-	aws.SecretAccessKey = viper.GetString("secret-access-key")
+	accessKeyID = viper.GetString("access-key-id")
+	secretAccessKey = viper.GetString("secret-access-key")
 
-	if aws.AccessKeyID == "" && aws.SecretAccessKey == "" {
-		aws.UseChainCredentials = true
+	if accessKeyID == "" && secretAccessKey == "" {
+		useChainCredentials = true
 	}
 
 	return nil
@@ -89,9 +98,21 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
 
+		opts := []aws.SecretsClientOpt{aws.CacheTTL(common.DefaultCacheTTL), aws.Profile(profile), aws.Region(region)}
+		if useChainCredentials {
+			opts = append(opts, aws.UseChainCredentials())
+		} else {
+			opts = append(opts, aws.AccessKeyIDAndSecretAccessKey(accessKeyID, secretAccessKey))
+		}
+
+		client, err := aws.NewSecretsClient(opts...)
+		common.ExitIfError(err)
+
 		// create custom function map
 		funcMap := template.FuncMap{
-			"aws": aws.GetAwsSecret,
+			"aws":     client.GetJSONSecret,
+			"awsJson": client.GetJSONSecret,
+			"awsText": client.GetTextSecret,
 		}
 
 		var files []string
@@ -99,7 +120,7 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 			files = args
 		}
 
-		err := common.GetSecrets(files, funcMap)
+		err = common.GetSecrets(files, funcMap)
 		common.ExitIfError(err)
 
 	},
@@ -117,7 +138,7 @@ func init() {
 	// aws command and common persistent flags
 	awsCmd.AddCommand(awsGetSecretsCmd)
 	awsCmd.PersistentFlags().StringVarP(
-		&aws.Region,
+		&region,
 		"region",
 		"",
 		"",
@@ -125,21 +146,21 @@ func init() {
 	_ = viper.BindEnv("region", "AWS_DEFAULT_REGION")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&aws.AccessKeyID,
+		&accessKeyID,
 		"access-key-id",
 		"",
 		"",
 		"AWS Access Key ID can alternatively be set using ${AWS_ACCESS_KEY_ID}")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&aws.SecretAccessKey,
+		&secretAccessKey,
 		"secret-access-key",
 		"",
 		"",
 		"AWS Secret Access Key can alternatively be set using ${AWS_SECRET_ACCESS_KEY}")
 
 	awsCmd.PersistentFlags().StringVarP(
-		&aws.Profile,
+		&profile,
 		"profile",
 		"",
 		"",
