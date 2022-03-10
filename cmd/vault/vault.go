@@ -1,4 +1,4 @@
-// Copyright © 2021 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@ package vault
 import (
 	"errors"
 	"fmt"
-	"github.com/boxboat/dockcmd/cmd/common"
-	"github.com/hashicorp/vault/api"
-	"github.com/patrickmn/go-cache"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/boxboat/dockcmd/cmd/common"
+	"github.com/hashicorp/vault/api"
+	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -30,56 +31,114 @@ const (
 	RoleAuth  = "vaultRole"
 )
 
-var (
-	Auth        string
-	Addr        string
-	Client      *api.Client
-	Token       string
-	RoleID      string
-	SecretID    string
-	SecretCache *cache.Cache
-	CacheTTL    = 5 * time.Minute
-)
-
-func init(){
-	SecretCache = cache.New(CacheTTL, CacheTTL)
+type SecretsClient struct {
+	common.SecretClient
+	secretCache *cache.Cache
+	vaultClient *api.Client
 }
 
-func getVaultClient() (*api.Client, error){
-	if Client == nil {
-		config := api.DefaultConfig()
-		config.Address = Addr
-		var err error
-		Client, err = api.NewClient(config)
+type SecretsClientOpt interface {
+	configureSecretsClient(opts *secretsClientOpts) error
+}
+
+type secretsClientOpts struct {
+	cacheTTL time.Duration
+	address  string
+	authType string
+	token    string
+	roleID   string
+	secretID string
+}
+
+type secretClientOptFn func(opts *secretsClientOpts) error
+
+func (opt secretClientOptFn) configureSecretsClient(opts *secretsClientOpts) error {
+	return opt(opts)
+}
+
+func CacheTTL(ttl time.Duration) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
+		opts.cacheTTL = ttl
+		return nil
+	})
+}
+
+func Address(address string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
+		opts.address = address
+		return nil
+	})
+}
+
+func Token(token string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
+		opts.token = token
+		return nil
+	})
+}
+
+func AuthType(authType string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
+		opts.authType = authType
+		return nil
+	})
+}
+
+func RoleAndSecretID(roleID, secretID string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
+		opts.roleID = roleID
+		opts.secretID = secretID
+		return nil
+	})
+}
+
+func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
+	var o secretsClientOpts
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt.configureSecretsClient(&o); err != nil {
+				return nil, err
+			}
+		}
+	}
+	client := &SecretsClient{
+		secretCache: cache.New(o.cacheTTL, o.cacheTTL),
+	}
+
+	config := api.DefaultConfig()
+	config.Address = o.address
+	vaultClient, err := api.NewClient(config)
+	if err != nil {
+		return nil, err
+	}
+
+	if o.authType == RoleAuth {
+		common.Logger.Debugf(
+			"getting vault-token using vault-role-id {%s} and vault-secret-id {%s}",
+			o.roleID,
+			o.secretID)
+		appRoleLogin := map[string]interface{}{
+			"role_id":   o.roleID,
+			"secret_id": o.secretID,
+		}
+		resp, err := vaultClient.Logical().Write("auth/approle/login", appRoleLogin)
 		if err != nil {
 			return nil, err
 		}
-
-		if Auth == RoleAuth {
-			common.Logger.Debugf(
-				"getting vault-token using vault-role-id {%s} and vault-secret-id {%s}",
-				RoleID,
-				SecretID)
-			appRoleLogin := map[string]interface{}{
-				"role_id":   RoleID,
-				"secret_id": SecretID,
-			}
-			resp, err := Client.Logical().Write("auth/approle/login", appRoleLogin)
-			if err != nil {
-				return nil, err
-			}
-			if resp.Auth == nil {
-				return nil, errors.New("failed to obtain VAULT_TOKEN using vault-role-id and vault-secret-id")
-			}
-			Token = resp.Auth.ClientToken
+		if resp.Auth == nil {
+			return nil, errors.New("failed to obtain VAULT_TOKEN using vault-role-id and vault-secret-id")
 		}
-		common.Logger.Debugf("Using vault-token {%s}", Token)
-		Client.SetToken(Token)
+		common.Logger.Debugf("using vault-token {%s}", resp.Auth.ClientToken)
+		vaultClient.SetToken(resp.Auth.ClientToken)
+	} else {
+		common.Logger.Debugf("using specified vault-token {%s}", o.token)
+		vaultClient.SetToken(o.token)
 	}
-	return Client, nil
+	client.vaultClient = vaultClient
+	return client, nil
 }
 
-func GetVaultSecret(path string, key string) (string, error) {
+func (c *SecretsClient) GetJSONSecret(path string, key string) (string, error) {
 
 	secretPath := path
 	version := ""
@@ -89,8 +148,8 @@ func GetVaultSecret(path string, key string) (string, error) {
 		version = s[1]
 	}
 
-	if val, ok := SecretCache.Get(path); ok {
-		common.Logger.Debugf("Using cached [%s][%s]", path, key)
+	if val, ok := c.secretCache.Get(path); ok {
+		common.Logger.Debugf("using cached [%s][%s]", path, key)
 		secretStr, ok := val.(map[string]interface{})[key].(string)
 		if ok {
 			return secretStr, nil
@@ -101,17 +160,12 @@ func GetVaultSecret(path string, key string) (string, error) {
 		version = ""
 	}
 
-	common.Logger.Debugf("Reading secret[%s] key[%s]", secretPath, key)
+	common.Logger.Debugf("retrieving secret[%s] key[%s] from Vault", secretPath, key)
 
 	secretStr := ""
 	ok := false
 
-	client, err := getVaultClient()
-	if err != nil {
-		return "", err
-	}
-
-	mountPath, v2, err := isKVv2(secretPath, client)
+	mountPath, v2, err := isKVv2(secretPath, c.vaultClient)
 	if err != nil {
 		return "", err
 	}
@@ -122,11 +176,8 @@ func GetVaultSecret(path string, key string) (string, error) {
 		if version != "" {
 			query.Add("version", version)
 		}
-		client, err := getVaultClient()
-		if err != nil {
-			return "", err
-		}
-		secret, err := client.Logical().ReadWithData(queryPath, query)
+
+		secret, err := c.vaultClient.Logical().ReadWithData(queryPath, query)
 		if err != nil {
 			return "", err
 		}
@@ -136,11 +187,11 @@ func GetVaultSecret(path string, key string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("could not convert vault response [%s][%s] to string",
 				secretPath,
-					key)
+				key)
 		}
-		_ = SecretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
+		_ = c.secretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
 	} else {
-		secret, err := client.Logical().Read(secretPath)
+		secret, err := c.vaultClient.Logical().Read(secretPath)
 		if err != nil {
 			return "", err
 		}
@@ -150,9 +201,9 @@ func GetVaultSecret(path string, key string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("could not convert vault response [%s][%s] to string",
 				secretPath,
-					key)
+				key)
 		}
-		_ = SecretCache.Add(path, secret.Data, cache.DefaultExpiration)
+		_ = c.secretCache.Add(path, secret.Data, cache.DefaultExpiration)
 	}
 
 	return secretStr, nil

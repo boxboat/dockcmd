@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,15 +18,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/boxboat/dockcmd/cmd/elastic"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"strconv"
-	"time"
 )
-
-
 
 var esDeleteIndicesCmd = &cobra.Command{
 	Use:   "delete-indices",

@@ -1,4 +1,4 @@
-// Copyright © 2019 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,10 @@
 package cmd
 
 import (
-	"github.com/boxboat/dockcmd/cmd/common"
 	"os"
 	"strings"
+
+	"github.com/boxboat/dockcmd/cmd/common"
 
 	log "github.com/sirupsen/logrus"
 

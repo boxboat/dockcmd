@@ -1,4 +1,4 @@
-// Copyright © 2021 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,21 @@ package cmd
 
 import (
 	"errors"
+	"text/template"
+
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/boxboat/dockcmd/cmd/vault"
-	"text/template"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+)
+
+var (
+	auth     string
+	addr     string
+	token    string
+	roleID   string
+	secretID string
 )
 
 // vaultCmdPersistentPreRunE checks required persistent tokens for vaultCmd
@@ -30,23 +39,23 @@ func vaultCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	common.Logger.Debugln("vaultCmdPersistentPreRunE")
-	vault.Addr = viper.GetString("vault-addr")
-	if vault.Addr == "" {
+	addr = viper.GetString("vault-addr")
+	if addr == "" {
 		return errors.New("${VAULT_ADDR} must be set or passed in via --vault-addr")
 	}
-	vault.Token = viper.GetString("vault-token")
-	vault.RoleID = viper.GetString("vault-role-id")
-	vault.SecretID = viper.GetString("vault-secret-id")
+	token = viper.GetString("vault-token")
+	roleID = viper.GetString("vault-role-id")
+	secretID = viper.GetString("vault-secret-id")
 
-	if vault.RoleID != "" && vault.SecretID != "" {
-		vault.Auth = vault.RoleAuth
-	} else if vault.Token == "" {
+	if roleID != "" && secretID != "" {
+		auth = vault.RoleAuth
+	} else if token == "" {
 		return errors.New(
 			`${VAULT_TOKEN} must be set or passed in via --vault-token
  					or ${VAULT_ROLE_ID} and ${VAULT_SECRET_ID} must be set or passed in
 					via --vault-role-id and --vault-secret-id respectively`)
 	} else {
-		vault.Auth = vault.TokenAuth
+		auth = vault.TokenAuth
 	}
 	return nil
 }
@@ -93,11 +102,21 @@ keyD: "<value-of-secret/root-d-from-vault>"
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
-		common.Logger.Debugf("Vault URL: '%s'", vault.Addr)
+		common.Logger.Debugf("Vault URL: '%s'", addr)
+
+		opts := []vault.SecretsClientOpt{
+			vault.CacheTTL(common.DefaultCacheTTL),
+			vault.Address(addr),
+			vault.AuthType(auth),
+			vault.RoleAndSecretID(roleID, secretID),
+			vault.Token(token)}
+
+		client, err := vault.NewSecretsClient(opts...)
+		common.ExitIfError(err)
 
 		// create custom function map
 		funcMap := template.FuncMap{
-			"vault": vault.GetVaultSecret,
+			"vault": client.GetJSONSecret,
 		}
 
 		var files []string
@@ -105,7 +124,7 @@ keyD: "<value-of-secret/root-d-from-vault>"
 			files = args
 		}
 
-		err := common.GetSecrets(files, funcMap)
+		err = common.GetSecrets(files, funcMap)
 		common.ExitIfError(err)
 
 	},
@@ -124,28 +143,28 @@ func init() {
 	// vault command and common persistent flags
 	vaultCmd.AddCommand(vaultGetSecretsCmd)
 	vaultCmd.PersistentFlags().StringVarP(
-		&vault.Addr,
+		&addr,
 		"vault-addr",
 		"",
 		"",
 		"Vault ADDR")
 	viper.BindEnv("vault-addr", "VAULT_ADDR")
 	vaultCmd.PersistentFlags().StringVarP(
-		&vault.Token,
+		&token,
 		"vault-token",
 		"",
 		"",
 		"Vault Token can alternatively be set using ${VAULT_TOKEN}")
 
 	vaultCmd.PersistentFlags().StringVarP(
-		&vault.RoleID,
+		&roleID,
 		"vault-role-id",
 		"",
 		"",
 		"Vault Role Id if not using vault-token can alternatively be set using ${VAULT_ROLE_ID} (also requires vault-secret-id)")
 
 	vaultCmd.PersistentFlags().StringVarP(
-		&vault.SecretID,
+		&secretID,
 		"vault-secret-id",
 		"",
 		"",

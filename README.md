@@ -3,6 +3,8 @@
 
 `dockcmd` is a tool providing a collection of [BoxOps](https://boxops.io) utility functions. Which can be used standalone or to accelerate CI/CD with BoxBoat's [dockhand](https://github.com/boxboat/dockhand).
 
+[dockhand-secrets-operator](https://github.com/boxboat/dockhand-secrets-operator) leverages this project to facilitate secrets management within Kubernetes. 
+
 
 ***
 ## `aws`
@@ -24,6 +26,8 @@ See `dockcmd aws --help` for more details on `aws` flags.
 
 Retrieve secrets stored as JSON from AWS Secrets Manager. Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
 
+Note the `aws(secretName,secretKey)` function is now aliased to `awsJson(secretName, secretKey)`. `aws` will not be removed.
+
 `dockcmd aws get-secrets --region us-east-1 --set TargetEnv=prod --input-file secret-values.yaml`
 
 `secret-values.yaml`:
@@ -34,7 +38,7 @@ foo:
   keyB: {{ (aws (printf "%s-%s" .TargetEnv "foo") "b") | squote }}
   charlie:
     keyC: {{ (aws "foo" "c") | squote }}
-keyD: {{ (aws "root" "d") | quote }}
+keyD: {{ (awsText "root") | quote }}
 ```
 
 output:
@@ -44,7 +48,7 @@ foo:
   keyB: '<value-of-secret/foo-prod-b-from-aws-secrets-manager>'
   charlie:
     keyC: '<value-of-secret/foo-charlie-c-from-aws-secrets-manager>'
-keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
+keyD: "<value-of-secret/root-from-aws-secrets-manager>"
 ```
 
 Optionally, if you desire to retrieve a specific version of secret from AWS Secrets Manager you can append `?version=UID` or `?version=latest` to the secret name above, for example:
@@ -56,7 +60,7 @@ foo:
   keyB: {{ (aws (printf "%s-%s?version=latest" .TargetEnv "foo") "b") | squote }}
   charlie:
     keyC: {{ (aws "foo" "c") | squote }}
-keyD: {{ (aws "root" "d") | quote }}
+keyD: {{ (awsText "root") | quote }}
 ```
 
 Note if you need to find the versions UID you can use the AWS CLI `aws secretmanager list-secret-version-ids --secret-id foo`
@@ -174,7 +178,7 @@ keyD: {{ (gcpText "root" ) | quote }}
 ***
 
 ## `es`
-Elasticsearch utilities are under the `es` sub-command. Currently supports Elasticsearch API major version v6 and v7. For authentication, `es` commands will use the environment or credentials passed in as arguments:
+Elasticsearch utilities are under the `es` sub-command. Currently, supports Elasticsearch API major version v6 and v7. For authentication, `es` commands will use the environment or credentials passed in as arguments:
 
 #### Basic Auth
 `--username <username>` or `${ES_USERNAME}`
@@ -200,11 +204,14 @@ Delete indices from ES.
 See `dockcmd es delete-indices --help` for more details
 
 ***
+
 ## `gotpl`
 `dockcmd gotpl` mirrors the capabilities in each of the `get-secrets` commands but does not connect to a secrets backend. Essentially this command is a go template processor that supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function with `helm` like value passing.
 
 Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
+
 ***
+
 ## `vault`
 
 Vault utilities are under the `vault` sub-command. For authentication, `vault` commands will use the environment or credentials passed in as arguments:
