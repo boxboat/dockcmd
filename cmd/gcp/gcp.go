@@ -46,6 +46,7 @@ type secretsManagerOpts struct {
 	credentialsFile          string
 	credentialsJson          []byte
 	useAppDefaultCredentials bool
+	project                  string
 	cacheTTL                 time.Duration
 }
 
@@ -69,6 +70,13 @@ func CredentialsJson(jsonBytes []byte) SecretsManagerOpt {
 	})
 }
 
+func Project(project string) SecretsManagerOpt {
+	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+		opts.project = project
+		return nil
+	})
+}
+
 func UseApplicationDefaultCredentials() SecretsManagerOpt {
 	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
 		opts.useAppDefaultCredentials = true
@@ -83,7 +91,7 @@ func CacheTTL(ttl time.Duration) SecretsManagerOpt {
 	})
 }
 
-func NewSecretsManagerClient(ctx context.Context, gcpProject string, opts ...SecretsManagerOpt) (*SecretsManager, error) {
+func NewSecretsManagerClient(ctx context.Context, opts ...SecretsManagerOpt) (*SecretsManager, error) {
 	var o secretsManagerOpts
 	for _, opt := range opts {
 		if opt != nil {
@@ -97,7 +105,7 @@ func NewSecretsManagerClient(ctx context.Context, gcpProject string, opts ...Sec
 		ctx:                  ctx,
 		SecretsManagerClient: nil,
 		SecretCache:          cache.New(o.cacheTTL, o.cacheTTL),
-		Project:              gcpProject,
+		Project:              o.project,
 	}
 	if o.useAppDefaultCredentials {
 		common.Logger.Debugf("using ADC for client authentication")
