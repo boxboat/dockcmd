@@ -34,11 +34,10 @@ import (
 
 const latestVersion = "AWSCURRENT"
 
-type SecretsManager struct {
+type SecretsClient struct {
 	common.SecretClient
-	Session              *session.Session
-	SecretsManagerClient *secretsmanager.SecretsManager
-	SecretCache          *cache.Cache
+	secretsManagerClient *secretsmanager.SecretsManager
+	secretCache          *cache.Cache
 }
 
 // SessionProvider custom provider to allow for fallback to session configured credentials.
@@ -46,11 +45,11 @@ type SessionProvider struct {
 	Session *session.Session
 }
 
-type SecretsManagerOpt interface {
-	configureSecretsManager(opts *secretsManagerOpts) error
+type SecretsClientOpt interface {
+	configureSecretsClient(opts *secretsClientOpts) error
 }
 
-type secretsManagerOpts struct {
+type secretsClientOpts struct {
 	region              string
 	profile             string
 	accessKeyID         string
@@ -59,60 +58,60 @@ type secretsManagerOpts struct {
 	cacheTTL            time.Duration
 }
 
-type secretManagerOptFn func(opts *secretsManagerOpts) error
+type secretClientOptFn func(opts *secretsClientOpts) error
 
-func CacheTTL(ttl time.Duration) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func CacheTTL(ttl time.Duration) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.cacheTTL = ttl
 		return nil
 	})
 }
 
-func AccessKeyIDAndSecretAccessKey(accessKeyID, secretAccessKey string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func AccessKeyIDAndSecretAccessKey(accessKeyID, secretAccessKey string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.accessKeyID = accessKeyID
 		opts.secretAccessKey = secretAccessKey
 		return nil
 	})
 }
 
-func Profile(profile string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func Profile(profile string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.profile = profile
 		return nil
 	})
 }
 
-func Region(region string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func Region(region string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.region = region
 		return nil
 	})
 }
 
-func UseChainCredentials() SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func UseChainCredentials() SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.useChainCredentials = true
 		return nil
 	})
 }
 
-func (opt secretManagerOptFn) configureSecretsManager(opts *secretsManagerOpts) error {
+func (opt secretClientOptFn) configureSecretsClient(opts *secretsClientOpts) error {
 	return opt(opts)
 }
 
-func NewSecretsManagerClient(opts ...SecretsManagerOpt) (*SecretsManager, error) {
-	var o secretsManagerOpts
+func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
+	var o secretsClientOpts
 	for _, opt := range opts {
 		if opt != nil {
-			if err := opt.configureSecretsManager(&o); err != nil {
+			if err := opt.configureSecretsClient(&o); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	client := &SecretsManager{
-		SecretCache: cache.New(o.cacheTTL, o.cacheTTL),
+	client := &SecretsClient{
+		secretCache: cache.New(o.cacheTTL, o.cacheTTL),
 	}
 
 	sess, err := session.NewSessionWithOptions(session.Options{
@@ -144,7 +143,7 @@ func NewSecretsManagerClient(opts ...SecretsManagerOpt) (*SecretsManager, error)
 		creds = credentials.NewStaticCredentials(o.accessKeyID, o.secretAccessKey, "")
 	}
 
-	client.SecretsManagerClient = secretsmanager.New(
+	client.secretsManagerClient = secretsmanager.New(
 		sess,
 		aws.NewConfig().WithRegion(o.region).WithCredentials(creds))
 
@@ -161,7 +160,7 @@ func (m *SessionProvider) IsExpired() bool {
 	return m.Session.Config.Credentials.IsExpired()
 }
 
-func (c *SecretsManager) getSecret(secretName string) (string, string, error) {
+func (c *SecretsClient) getSecret(secretName string) (string, string, error) {
 	adjustedSecretName := secretName
 	version := latestVersion
 	s := strings.Split(adjustedSecretName, "?version=")
@@ -179,10 +178,8 @@ func (c *SecretsManager) getSecret(secretName string) (string, string, error) {
 		input.VersionId = aws.String(version)
 	}
 
-	common.Logger.Debugf("Retrieving %s", adjustedSecretName)
-
-	common.Logger.Debugf("Retrieving [%s] from AWS Secrets Manager", adjustedSecretName)
-	result, err := c.SecretsManagerClient.GetSecretValue(input)
+	common.Logger.Debugf("retrieving [%s] from AWS Secrets Manager", adjustedSecretName)
+	result, err := c.secretsManagerClient.GetSecretValue(input)
 
 	if err != nil {
 		var errorMessage string
@@ -232,9 +229,9 @@ func (c *SecretsManager) getSecret(secretName string) (string, string, error) {
 	return adjustedSecretName, secretString, nil
 }
 
-func (c *SecretsManager) GetTextSecret(secretName string) (string, error) {
-	if val, ok := c.SecretCache.Get(secretName); ok {
-		common.Logger.Debugf("Using cached [%s]", secretName)
+func (c *SecretsClient) GetTextSecret(secretName string) (string, error) {
+	if val, ok := c.secretCache.Get(secretName); ok {
+		common.Logger.Debugf("using cached [%s]", secretName)
 		if secretStr, ok := val.(string); ok {
 			return secretStr, nil
 		}
@@ -245,15 +242,15 @@ func (c *SecretsManager) GetTextSecret(secretName string) (string, error) {
 		return "", err
 	}
 
-	_ = c.SecretCache.Add(secretName, secretString, cache.DefaultExpiration)
+	_ = c.secretCache.Add(secretName, secretString, cache.DefaultExpiration)
 
 	return secretString, nil
 
 }
 
-func (c *SecretsManager) GetJSONSecret(secretName, secretKey string) (string, error) {
-	if val, ok := c.SecretCache.Get(secretName); ok {
-		common.Logger.Debugf("Using cached [%s][%s]", secretName, secretKey)
+func (c *SecretsClient) GetJSONSecret(secretName, secretKey string) (string, error) {
+	if val, ok := c.secretCache.Get(secretName); ok {
+		common.Logger.Debugf("using cached [%s][%s]", secretName, secretKey)
 		if secretStr, ok := val.(map[string]interface{})[secretKey].(string); ok {
 			return secretStr, nil
 		}
@@ -275,7 +272,7 @@ func (c *SecretsManager) GetJSONSecret(secretName, secretKey string) (string, er
 			secretStr,
 			adjustedSecretName)
 	}
-	_ = c.SecretCache.Add(secretName, response, cache.DefaultExpiration)
+	_ = c.secretCache.Add(secretName, response, cache.DefaultExpiration)
 
 	return secretStr, nil
 }

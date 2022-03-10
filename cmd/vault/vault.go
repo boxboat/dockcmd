@@ -31,17 +31,17 @@ const (
 	RoleAuth  = "vaultRole"
 )
 
-type SecretsManager struct {
+type SecretsClient struct {
 	common.SecretClient
-	SecretCache *cache.Cache
-	VaultClient *api.Client
+	secretCache *cache.Cache
+	vaultClient *api.Client
 }
 
-type SecretsManagerOpt interface {
-	configureSecretsManager(opts *secretsManagerOpts) error
+type SecretsClientOpt interface {
+	configureSecretsClient(opts *secretsClientOpts) error
 }
 
-type secretsManagerOpts struct {
+type secretsClientOpts struct {
 	cacheTTL time.Duration
 	address  string
 	authType string
@@ -50,59 +50,59 @@ type secretsManagerOpts struct {
 	secretID string
 }
 
-type secretManagerOptFn func(opts *secretsManagerOpts) error
+type secretClientOptFn func(opts *secretsClientOpts) error
 
-func (opt secretManagerOptFn) configureSecretsManager(opts *secretsManagerOpts) error {
+func (opt secretClientOptFn) configureSecretsClient(opts *secretsClientOpts) error {
 	return opt(opts)
 }
 
-func CacheTTL(ttl time.Duration) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func CacheTTL(ttl time.Duration) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.cacheTTL = ttl
 		return nil
 	})
 }
 
-func Address(address string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func Address(address string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.address = address
 		return nil
 	})
 }
 
-func Token(token string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func Token(token string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.token = token
 		return nil
 	})
 }
 
-func AuthType(authType string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func AuthType(authType string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.authType = authType
 		return nil
 	})
 }
 
-func RoleAndSecretID(roleID, secretID string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func RoleAndSecretID(roleID, secretID string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.roleID = roleID
 		opts.secretID = secretID
 		return nil
 	})
 }
 
-func NewVaultClient(opts ...SecretsManagerOpt) (*SecretsManager, error) {
-	var o secretsManagerOpts
+func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
+	var o secretsClientOpts
 	for _, opt := range opts {
 		if opt != nil {
-			if err := opt.configureSecretsManager(&o); err != nil {
+			if err := opt.configureSecretsClient(&o); err != nil {
 				return nil, err
 			}
 		}
 	}
-	client := &SecretsManager{
-		SecretCache: cache.New(o.cacheTTL, o.cacheTTL),
+	client := &SecretsClient{
+		secretCache: cache.New(o.cacheTTL, o.cacheTTL),
 	}
 
 	config := api.DefaultConfig()
@@ -131,14 +131,14 @@ func NewVaultClient(opts ...SecretsManagerOpt) (*SecretsManager, error) {
 		common.Logger.Debugf("using vault-token {%s}", resp.Auth.ClientToken)
 		vaultClient.SetToken(resp.Auth.ClientToken)
 	} else {
-		common.Logger.Debugf("Using specified vault-token {%s}", o.token)
+		common.Logger.Debugf("using specified vault-token {%s}", o.token)
 		vaultClient.SetToken(o.token)
 	}
-	client.VaultClient = vaultClient
+	client.vaultClient = vaultClient
 	return client, nil
 }
 
-func (c *SecretsManager) GetJSONSecret(path string, key string) (string, error) {
+func (c *SecretsClient) GetJSONSecret(path string, key string) (string, error) {
 
 	secretPath := path
 	version := ""
@@ -148,8 +148,8 @@ func (c *SecretsManager) GetJSONSecret(path string, key string) (string, error) 
 		version = s[1]
 	}
 
-	if val, ok := c.SecretCache.Get(path); ok {
-		common.Logger.Debugf("Using cached [%s][%s]", path, key)
+	if val, ok := c.secretCache.Get(path); ok {
+		common.Logger.Debugf("using cached [%s][%s]", path, key)
 		secretStr, ok := val.(map[string]interface{})[key].(string)
 		if ok {
 			return secretStr, nil
@@ -160,12 +160,12 @@ func (c *SecretsManager) GetJSONSecret(path string, key string) (string, error) 
 		version = ""
 	}
 
-	common.Logger.Debugf("Reading secret[%s] key[%s]", secretPath, key)
+	common.Logger.Debugf("retrieving secret[%s] key[%s] from Vault", secretPath, key)
 
 	secretStr := ""
 	ok := false
 
-	mountPath, v2, err := isKVv2(secretPath, c.VaultClient)
+	mountPath, v2, err := isKVv2(secretPath, c.vaultClient)
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +177,7 @@ func (c *SecretsManager) GetJSONSecret(path string, key string) (string, error) 
 			query.Add("version", version)
 		}
 
-		secret, err := c.VaultClient.Logical().ReadWithData(queryPath, query)
+		secret, err := c.vaultClient.Logical().ReadWithData(queryPath, query)
 		if err != nil {
 			return "", err
 		}
@@ -189,9 +189,9 @@ func (c *SecretsManager) GetJSONSecret(path string, key string) (string, error) 
 				secretPath,
 				key)
 		}
-		_ = c.SecretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
+		_ = c.secretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
 	} else {
-		secret, err := c.VaultClient.Logical().Read(secretPath)
+		secret, err := c.vaultClient.Logical().Read(secretPath)
 		if err != nil {
 			return "", err
 		}
@@ -203,7 +203,7 @@ func (c *SecretsManager) GetJSONSecret(path string, key string) (string, error) 
 				secretPath,
 				key)
 		}
-		_ = c.SecretCache.Add(path, secret.Data, cache.DefaultExpiration)
+		_ = c.secretCache.Add(path, secret.Data, cache.DefaultExpiration)
 	}
 
 	return secretStr, nil

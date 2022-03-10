@@ -81,7 +81,7 @@ keyD: "<value-of-secret/root-from-gcp-secrets-manager>"
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
 
-		opts := []gcp.SecretsManagerOpt{
+		opts := []gcp.SecretsClientOpt{
 			gcp.Project(project),
 			gcp.CacheTTL(common.DefaultCacheTTL)}
 
@@ -91,7 +91,7 @@ keyD: "<value-of-secret/root-from-gcp-secrets-manager>"
 			opts = append(opts, gcp.UseApplicationDefaultCredentials())
 		}
 
-		client, err := gcp.NewSecretsManagerClient(cmd.Context(), opts...)
+		client, err := gcp.NewSecretsClient(cmd.Context(), opts...)
 		common.ExitIfError(err)
 
 		// create custom function map

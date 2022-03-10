@@ -104,14 +104,14 @@ keyD: "<value-of-secret/root-d-from-vault>"
 		common.Logger.Debug("get-secrets called")
 		common.Logger.Debugf("Vault URL: '%s'", addr)
 
-		opts := []vault.SecretsManagerOpt{
+		opts := []vault.SecretsClientOpt{
 			vault.CacheTTL(common.DefaultCacheTTL),
 			vault.Address(addr),
 			vault.AuthType(auth),
 			vault.RoleAndSecretID(roleID, secretID),
 			vault.Token(token)}
 
-		client, err := vault.NewVaultClient(opts...)
+		client, err := vault.NewSecretsClient(opts...)
 		common.ExitIfError(err)
 
 		// create custom function map

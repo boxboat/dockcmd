@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	client        *azure.KeyVaultClient
+	client        *azure.SecretsClient
 	clientID      string
 	clientSecret  string
 	tenantID      string
@@ -95,7 +95,7 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
 
-		opts := []azure.KeyVaultOpt{azure.KeyVaultName(keyVaultName), azure.CacheTTL(common.DefaultCacheTTL)}
+		opts := []azure.SecretsClientOpt{azure.KeyVaultName(keyVaultName), azure.CacheTTL(common.DefaultCacheTTL)}
 
 		if useAzCliLogin {
 			opts = append(opts, azure.UseAzCliLogin())
@@ -103,7 +103,7 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 			opts = append(opts, azure.ClientIDAndSecret(clientID, clientSecret), azure.TenantID(tenantID))
 		}
 		var err error
-		client, err = azure.NewKeyVaultClient(opts...)
+		client, err = azure.NewSecretsClient(opts...)
 		common.ExitIfError(err)
 
 		// create custom function map

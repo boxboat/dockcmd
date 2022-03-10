@@ -31,18 +31,18 @@ import (
 
 const latestVersion = "latest"
 
-type SecretsManager struct {
+type SecretsClient struct {
 	ctx                  context.Context
-	SecretsManagerClient *secretmanager.Client
-	SecretCache          *cache.Cache
-	Project              string
+	secretsManagerClient *secretmanager.Client
+	secretCache          *cache.Cache
+	project              string
 }
 
-type SecretsManagerOpt interface {
-	configureSecretsManager(opts *secretsManagerOpts) error
+type SecretsClientOpt interface {
+	configureSecretsClient(opts *secretsClientOpts) error
 }
 
-type secretsManagerOpts struct {
+type secretsClientOpts struct {
 	credentialsFile          string
 	credentialsJson          []byte
 	useAppDefaultCredentials bool
@@ -50,62 +50,62 @@ type secretsManagerOpts struct {
 	cacheTTL                 time.Duration
 }
 
-type secretManagerOptFn func(opts *secretsManagerOpts) error
+type secretClientOptFn func(opts *secretsClientOpts) error
 
-func (opt secretManagerOptFn) configureSecretsManager(opts *secretsManagerOpts) error {
+func (opt secretClientOptFn) configureSecretsClient(opts *secretsClientOpts) error {
 	return opt(opts)
 }
 
-func CredentialsFile(filename string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func CredentialsFile(filename string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.credentialsFile = filename
 		return nil
 	})
 }
 
-func CredentialsJson(jsonBytes []byte) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func CredentialsJson(jsonBytes []byte) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.credentialsJson = jsonBytes
 		return nil
 	})
 }
 
-func Project(project string) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func Project(project string) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.project = project
 		return nil
 	})
 }
 
-func UseApplicationDefaultCredentials() SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func UseApplicationDefaultCredentials() SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.useAppDefaultCredentials = true
 		return nil
 	})
 }
 
-func CacheTTL(ttl time.Duration) SecretsManagerOpt {
-	return secretManagerOptFn(func(opts *secretsManagerOpts) error {
+func CacheTTL(ttl time.Duration) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
 		opts.cacheTTL = ttl
 		return nil
 	})
 }
 
-func NewSecretsManagerClient(ctx context.Context, opts ...SecretsManagerOpt) (*SecretsManager, error) {
-	var o secretsManagerOpts
+func NewSecretsClient(ctx context.Context, opts ...SecretsClientOpt) (*SecretsClient, error) {
+	var o secretsClientOpts
 	for _, opt := range opts {
 		if opt != nil {
-			if err := opt.configureSecretsManager(&o); err != nil {
+			if err := opt.configureSecretsClient(&o); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	client := &SecretsManager{
+	client := &SecretsClient{
 		ctx:                  ctx,
-		SecretsManagerClient: nil,
-		SecretCache:          cache.New(o.cacheTTL, o.cacheTTL),
-		Project:              o.project,
+		secretsManagerClient: nil,
+		secretCache:          cache.New(o.cacheTTL, o.cacheTTL),
+		project:              o.project,
 	}
 	if o.useAppDefaultCredentials {
 		common.Logger.Debugf("using ADC for client authentication")
@@ -113,21 +113,21 @@ func NewSecretsManagerClient(ctx context.Context, opts ...SecretsManagerOpt) (*S
 		if err != nil {
 			return nil, err
 		}
-		client.SecretsManagerClient = c
+		client.secretsManagerClient = c
 	} else if o.credentialsFile != "" {
 		common.Logger.Debugf("using credentials file[%s] for client authentication", o.credentialsFile)
 		c, err := secretmanager.NewClient(ctx, option.WithCredentialsFile(o.credentialsFile))
 		if err != nil {
 			return nil, err
 		}
-		client.SecretsManagerClient = c
+		client.secretsManagerClient = c
 	} else if len(o.credentialsJson) > 0 {
 		common.Logger.Debugf("using credentials json for client authentication")
 		c, err := secretmanager.NewClient(ctx, option.WithCredentialsJSON(o.credentialsJson))
 		if err != nil {
 			return nil, err
 		}
-		client.SecretsManagerClient = c
+		client.secretsManagerClient = c
 	} else {
 		return nil, fmt.Errorf("unknown GCP authentication method provided, please use ADC or JSON authentication methods")
 	}
@@ -136,7 +136,7 @@ func NewSecretsManagerClient(ctx context.Context, opts ...SecretsManagerOpt) (*S
 
 }
 
-func (c *SecretsManager) GetJSONSecret(secretName, secretKey string) (string, error) {
+func (c *SecretsClient) GetJSONSecret(secretName, secretKey string) (string, error) {
 	version := latestVersion
 	s := strings.Split(secretName, "?version=")
 	if len(s) > 1 {
@@ -144,16 +144,16 @@ func (c *SecretsManager) GetJSONSecret(secretName, secretKey string) (string, er
 		secretName = s[0]
 	}
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", c.Project, secretName, version)
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", c.project, secretName, version)
 
-	common.Logger.Debugf("Retrieving [%s][%s]", projectSecretName, secretKey)
-
-	if val, ok := c.SecretCache.Get(projectSecretName); ok {
+	if val, ok := c.secretCache.Get(projectSecretName); ok {
 		common.Logger.Debugf("Using cached [%s][%s]", projectSecretName, secretKey)
 		if secretStr, ok := val.(map[string]interface{})[secretKey].(string); ok {
 			return secretStr, nil
 		}
 	}
+
+	common.Logger.Debugf("retrieving [%s][%s] from GCP Secrets Manager", projectSecretName, secretKey)
 
 	// Build the request.
 	req := &secretmanagerpb.AccessSecretVersionRequest{
@@ -161,7 +161,7 @@ func (c *SecretsManager) GetJSONSecret(secretName, secretKey string) (string, er
 	}
 
 	// Call the API.
-	result, err := c.SecretsManagerClient.AccessSecretVersion(c.ctx, req)
+	result, err := c.secretsManagerClient.AccessSecretVersion(c.ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret: %v", err)
 	}
@@ -178,12 +178,12 @@ func (c *SecretsManager) GetJSONSecret(secretName, secretKey string) (string, er
 			secretKey)
 	}
 
-	_ = c.SecretCache.Add(projectSecretName, response, cache.DefaultExpiration)
+	_ = c.secretCache.Add(projectSecretName, response, cache.DefaultExpiration)
 
 	return secretStr, nil
 }
 
-func (c *SecretsManager) GetTextSecret(secretName string) (string, error) {
+func (c *SecretsClient) GetTextSecret(secretName string) (string, error) {
 	version := latestVersion
 	s := strings.Split(secretName, "?version=")
 	if len(s) > 1 {
@@ -191,16 +191,16 @@ func (c *SecretsManager) GetTextSecret(secretName string) (string, error) {
 		secretName = s[0]
 	}
 
-	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", c.Project, secretName, version)
+	projectSecretName := fmt.Sprintf("projects/%s/secrets/%s/versions/%s", c.project, secretName, version)
 
-	common.Logger.Debugf("Retrieving [%s]", projectSecretName)
-
-	if val, ok := c.SecretCache.Get(projectSecretName); ok {
+	if val, ok := c.secretCache.Get(projectSecretName); ok {
 		common.Logger.Debugf("Using cached [%s]", projectSecretName)
 		if secretStr, ok := val.(string); ok {
 			return secretStr, nil
 		}
 	}
+
+	common.Logger.Debugf("retrieving [%s] from GCP Secrets Manager", projectSecretName)
 
 	// Build the request.
 	req := &secretmanagerpb.AccessSecretVersionRequest{
@@ -208,14 +208,14 @@ func (c *SecretsManager) GetTextSecret(secretName string) (string, error) {
 	}
 
 	// Call the API.
-	result, err := c.SecretsManagerClient.AccessSecretVersion(context.Background(), req)
+	result, err := c.secretsManagerClient.AccessSecretVersion(context.Background(), req)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret: %v", err)
 	}
 
 	secretStr := string(result.Payload.Data)
 
-	_ = c.SecretCache.Add(projectSecretName, secretStr, cache.DefaultExpiration)
+	_ = c.secretCache.Add(projectSecretName, secretStr, cache.DefaultExpiration)
 
 	return secretStr, nil
 }
