@@ -1,4 +1,4 @@
-// Copyright © 2021 BoxBoat engineering@boxboat.com
+// Copyright © 2022 BoxBoat engineering@boxboat.com
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -128,6 +128,7 @@ func NewVaultClient(opts ...SecretsManagerOpt) (*SecretsManager, error) {
 		if resp.Auth == nil {
 			return nil, errors.New("failed to obtain VAULT_TOKEN using vault-role-id and vault-secret-id")
 		}
+		common.Logger.Debugf("using vault-token {%s}", resp.Auth.ClientToken)
 		vaultClient.SetToken(resp.Auth.ClientToken)
 	} else {
 		common.Logger.Debugf("Using specified vault-token {%s}", o.token)
