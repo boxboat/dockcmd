@@ -129,14 +129,6 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 	},
 }
 
-func GetJSON(secretName, secretKey string) (string, error) {
-	return client.GetJSONSecret(secretName, secretKey)
-}
-
-func GetText(secretName string) (string, error) {
-	return client.GetTextSecret(secretName)
-}
-
 func init() {
 	rootCmd.AddCommand(azureCmd)
 
