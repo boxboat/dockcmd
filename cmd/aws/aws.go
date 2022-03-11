@@ -24,8 +24,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/boxboat/dockcmd/cmd/common"
@@ -122,21 +120,7 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 	}
 
 	var creds = sess.Config.Credentials
-	if o.useChainCredentials {
-		creds = credentials.NewChainCredentials(
-			[]credentials.Provider{
-				&credentials.EnvProvider{},
-				&credentials.SharedCredentialsProvider{
-					Profile: o.profile,
-				},
-				&ec2rolecreds.EC2RoleProvider{
-					Client: ec2metadata.New(sess),
-				},
-				&SessionProvider{
-					Session: sess,
-				},
-			})
-	} else {
+	if !o.useChainCredentials {
 		if o.accessKeyID == "" || o.secretAccessKey == "" {
 			return nil, errors.New("no aws credentials provided")
 		}
