@@ -38,11 +38,6 @@ type SecretsClient struct {
 	secretCache          *cache.Cache
 }
 
-// SessionProvider custom provider to allow for fallback to session configured credentials.
-type SessionProvider struct {
-	Session *session.Session
-}
-
 type SecretsClientOpt interface {
 	configureSecretsClient(opts *secretsClientOpts) error
 }
@@ -132,16 +127,6 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 		aws.NewConfig().WithRegion(o.region).WithCredentials(creds))
 
 	return client, nil
-}
-
-// Retrieve for SessionProvider.
-func (m *SessionProvider) Retrieve() (credentials.Value, error) {
-	return m.Session.Config.Credentials.Get()
-}
-
-// IsExpired for SessionProvider.
-func (m *SessionProvider) IsExpired() bool {
-	return m.Session.Config.Credentials.IsExpired()
 }
 
 func (c *SecretsClient) getSecret(secretName string) (string, string, error) {
