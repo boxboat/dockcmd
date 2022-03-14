@@ -24,8 +24,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/boxboat/dockcmd/cmd/common"
@@ -38,11 +36,6 @@ type SecretsClient struct {
 	common.SecretClient
 	secretsManagerClient *secretsmanager.SecretsManager
 	secretCache          *cache.Cache
-}
-
-// SessionProvider custom provider to allow for fallback to session configured credentials.
-type SessionProvider struct {
-	Session *session.Session
 }
 
 type SecretsClientOpt interface {
@@ -122,21 +115,7 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 	}
 
 	var creds = sess.Config.Credentials
-	if o.useChainCredentials {
-		creds = credentials.NewChainCredentials(
-			[]credentials.Provider{
-				&credentials.EnvProvider{},
-				&credentials.SharedCredentialsProvider{
-					Profile: o.profile,
-				},
-				&ec2rolecreds.EC2RoleProvider{
-					Client: ec2metadata.New(sess),
-				},
-				&SessionProvider{
-					Session: sess,
-				},
-			})
-	} else {
+	if !o.useChainCredentials {
 		if o.accessKeyID == "" || o.secretAccessKey == "" {
 			return nil, errors.New("no aws credentials provided")
 		}
@@ -148,16 +127,6 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 		aws.NewConfig().WithRegion(o.region).WithCredentials(creds))
 
 	return client, nil
-}
-
-// Retrieve for SessionProvider.
-func (m *SessionProvider) Retrieve() (credentials.Value, error) {
-	return m.Session.Config.Credentials.Get()
-}
-
-// IsExpired for SessionProvider.
-func (m *SessionProvider) IsExpired() bool {
-	return m.Session.Config.Credentials.IsExpired()
 }
 
 func (c *SecretsClient) getSecret(secretName string) (string, string, error) {
