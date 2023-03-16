@@ -48,8 +48,8 @@ jobs:
             echo "Version could not be determined" >&2
             exit 1
           else
-            echo CI_VERSION::${version} >> $CI_VERSION
-            echo PUBLISH::${publish} >> $PUBLISH
+            echo CI_VERSION::${version} >> $GITHUB_ENV
+            echo PUBLISH::${publish} >> $GITHUB_ENV
           fi
 
       - name: Build
