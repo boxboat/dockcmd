@@ -12,7 +12,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: '^1.19'
+          go-version: '1.19'
+          check-latest: true
 
       - name: Print Go Version
         run: go version
@@ -23,10 +24,12 @@ jobs:
           echo ${GITHUB_REF}
           tag=${GITHUB_REF#refs/tags/}
           publish="no"
+          release="no"
           if [ "${tag}" != "${GITHUB_REF}" ]; then
             tag=$(echo "${tag}" | sed -e 's/[^a-zA-Z0-9\-\.]/-/g')
             version=${tag}
             publish="yes"
+            release="yes"
           fi
 
           branch=${GITHUB_REF#refs/heads/}
@@ -50,6 +53,7 @@ jobs:
           else
             echo CI_VERSION=${version} >> $GITHUB_ENV
             echo PUBLISH=${publish} >> $GITHUB_ENV
+            echo RELEASE=${release} >> $GITHUB_ENV
           fi
 
       - name: Build
@@ -60,19 +64,27 @@ jobs:
             make
           fi
 
-      - uses: google-github-actions/setup-gcloud@v0
-        if: ${{ env.PUBLISH == 'yes' }}
-        with:
-          version: '290.0.1'
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
-
-      - name: Publish
-        if: ${{ env.PUBLISH == 'yes' }}
+      - name: Release Artifacts
+        if: ${{ env.RELEASE == 'yes' }}
         run: |
-          cd ./release;
-          gsutil -m -q cp -r -a public-read . gs://boxops/dockcmd/releases/
+          gh release create ${CI_VERSION} --draft --verify-tag --title "Release ${CI_VERSION}"
+          gh release upload ${CI_VERSION} ./release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+#      - uses: google-github-actions/setup-gcloud@v0
+#        if: ${{ env.PUBLISH == 'yes' }}
+#        with:
+#          version: '290.0.1'
+#          project_id: ${{ secrets.GCP_PROJECT_ID }}
+#          service_account_key: ${{ secrets.GCP_SA_KEY }}
+#          export_default_credentials: true
+
+#      - name: Publish
+#        if: ${{ env.PUBLISH == 'yes' }}
+#        run: |
+#          cd ./release;
+#          gsutil -m -q cp -r -a public-read . gs://boxops/dockcmd/releases/
 
       - name: Set up QEMU
         if: ${{ env.PUBLISH == 'yes' }}
@@ -111,9 +123,3 @@ jobs:
           tags: |
             boxboat/dockcmd:${{ env.CI_VERSION }}
             ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
-
-#      - name: Docker Hub Release
-#        if: ${{ steps.version.outputs.PUBLISH == 'yes' }}
-#        run: make docker
-#        env:
-#          CI_VERSION: ${{ steps.version.outputs.CI_VERSION }}

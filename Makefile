@@ -44,6 +44,7 @@ $(RELEASE_TARGETS):
 	GOOS=$(os) GOARCH=$(arch) CGO_ENABLED=0 go build \
     		-ldflags="-w -s -X main.Version=$(VERSION) -X github.com/boxboat/dockcmd/cmd.EnableDebug=$(DEBUG)" \
     		-o ./release/$(os)-$(arch)/$(VERSION)/
+	zip -j ./release/dockcmd-$(os)-$(arch).zip ./release/$(os)-$(arch)/$(VERSION)/*
 
 docker:
 	docker buildx build \
