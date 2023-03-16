@@ -97,7 +97,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.BOXBOAT_GITHUB_PUBLISH_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
         if: ${{ steps.version.env.PUBLISH == 'yes' }}
@@ -106,6 +106,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VERSION=${{ steps.version.env.CI_VERSION }}
           tags: |
             boxboat/dockcmd:${{ steps.version.env.CI_VERSION }}
             ghcr.io/boxboat/dockcmd:${{ steps.version.env.CI_VERSION }}
