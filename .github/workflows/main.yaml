@@ -107,10 +107,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            VERSION=${{ steps.version.env.CI_VERSION }}
+            VERSION=${{ env.CI_VERSION }}
           tags: |
-            boxboat/dockcmd:${{ steps.version.env.CI_VERSION }}
-            ghcr.io/boxboat/dockcmd:${{ steps.version.env.CI_VERSION }}
+            boxboat/dockcmd:${{ env.CI_VERSION }}
+            ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
 
 #      - name: Docker Hub Release
 #        if: ${{ steps.version.outputs.PUBLISH == 'yes' }}
