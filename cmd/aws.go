@@ -98,7 +98,12 @@ keyD: "<value-of-secret/root-d-from-aws-secrets-manager>"
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
 
-		opts := []aws.SecretsClientOpt{aws.CacheTTL(common.DefaultCacheTTL), aws.Profile(profile), aws.Region(region)}
+		opts := []aws.SecretsClientOpt{
+			aws.CacheTTL(common.DefaultCacheTTL),
+			aws.Profile(profile),
+			aws.Region(region),
+			aws.WithContext(awsCmd.Context()),
+		}
 		if useChainCredentials {
 			opts = append(opts, aws.UseChainCredentials())
 		} else {
