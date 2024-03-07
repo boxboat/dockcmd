@@ -95,7 +95,11 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 	Run: func(cmd *cobra.Command, args []string) {
 		common.Logger.Debug("get-secrets called")
 
-		opts := []azure.SecretsClientOpt{azure.KeyVaultName(keyVaultName), azure.CacheTTL(common.DefaultCacheTTL)}
+		opts := []azure.SecretsClientOpt{
+			azure.KeyVaultName(keyVaultName),
+			azure.CacheTTL(common.DefaultCacheTTL),
+			azure.WithContext(azureCmd.Context()),
+		}
 
 		if useAzCliLogin {
 			opts = append(opts, azure.UseAzCliLogin())
