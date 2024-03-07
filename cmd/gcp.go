@@ -83,7 +83,9 @@ keyD: "<value-of-secret/root-from-gcp-secrets-manager>"
 
 		opts := []gcp.SecretsClientOpt{
 			gcp.Project(project),
-			gcp.CacheTTL(common.DefaultCacheTTL)}
+			gcp.CacheTTL(common.DefaultCacheTTL),
+			gcp.WithContext(cmd.Context()),
+		}
 
 		if credentialsFile != "" {
 			opts = append(opts, gcp.CredentialsFile(credentialsFile))
@@ -91,7 +93,7 @@ keyD: "<value-of-secret/root-from-gcp-secrets-manager>"
 			opts = append(opts, gcp.UseApplicationDefaultCredentials())
 		}
 
-		client, err := gcp.NewSecretsClient(cmd.Context(), opts...)
+		client, err := gcp.NewSecretsClient(opts...)
 		common.ExitIfError(err)
 
 		// create custom function map

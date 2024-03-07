@@ -1,4 +1,4 @@
-// Copyright © 2022 BoxBoat engineering@boxboat.com
+// Copyright © 2024 BoxBoat
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,11 +33,16 @@ import (
 
 const latestVersion = "AWSCURRENT"
 
+type SecretsManagerGetSecretAPI interface {
+	GetSecretValue(ctx context.Context, params *secretsmanager.GetSecretValueInput, optFns ...func(options *secretsmanager.Options)) (*secretsmanager.GetSecretValueOutput, error)
+}
+
 type SecretsClient struct {
 	common.SecretClient
 	secretsManagerClient *secretsmanager.Client
 	secretCache          *cache.Cache
 	ctx                  context.Context
+	api                  SecretsManagerGetSecretAPI
 }
 
 type SecretsClientOpt interface {
@@ -52,6 +57,7 @@ type secretsClientOpts struct {
 	secretAccessKey     string
 	useChainCredentials bool
 	cacheTTL            time.Duration
+	api                 *SecretsManagerGetSecretAPI
 }
 
 type secretClientOptFn func(opts *secretsClientOpts) error
@@ -99,6 +105,13 @@ func WithContext(ctx context.Context) SecretsClientOpt {
 	})
 }
 
+func WithMockClient(api SecretsManagerGetSecretAPI) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
+		opts.api = &api
+		return nil
+	})
+}
+
 func (opt secretClientOptFn) configureSecretsClient(opts *secretsClientOpts) error {
 	return opt(opts)
 }
@@ -122,36 +135,41 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 		ctx:         o.ctx,
 	}
 
-	var cfg aws.Config
-	var err error
+	// facilitates mock unit testing by allowing the client to be created without a connection to aws
+	if o.api == nil {
+		var cfg aws.Config
+		var err error
 
-	if !o.useChainCredentials {
-		if o.accessKeyID == "" || o.secretAccessKey == "" {
-			return nil, errors.New("no aws credentials provided")
+		if !o.useChainCredentials {
+			if o.accessKeyID == "" || o.secretAccessKey == "" {
+				return nil, errors.New("no aws credentials provided")
+			}
+			cfg, err = config.LoadDefaultConfig(
+				o.ctx,
+				config.WithRegion(o.region),
+				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(o.accessKeyID, o.secretAccessKey, "")))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			cfg, err = config.LoadDefaultConfig(
+				o.ctx,
+				config.WithRegion(o.region),
+				config.WithSharedConfigProfile(o.profile))
+			if err != nil {
+				return nil, err
+			}
 		}
-		cfg, err = config.LoadDefaultConfig(
-			o.ctx,
-			config.WithRegion(o.region),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(o.accessKeyID, o.secretAccessKey, "")))
-		if err != nil {
-			return nil, err
-		}
+
+		client.secretsManagerClient = secretsmanager.NewFromConfig(cfg)
+		client.api = client.secretsManagerClient
 	} else {
-		cfg, err = config.LoadDefaultConfig(
-			o.ctx,
-			config.WithRegion(o.region),
-			config.WithSharedConfigProfile(o.profile))
-		if err != nil {
-			return nil, err
-		}
+		client.api = *o.api
 	}
-
-	client.secretsManagerClient = secretsmanager.NewFromConfig(cfg)
-
 	return client, nil
 }
 
-func (c *SecretsClient) getSecret(secretName string) (string, string, error) {
+func (c *SecretsClient) GetSecret(secretName string) (string, string, error) {
 	adjustedSecretName := secretName
 	version := latestVersion
 	s := strings.Split(adjustedSecretName, "?version=")
@@ -170,7 +188,7 @@ func (c *SecretsClient) getSecret(secretName string) (string, string, error) {
 	}
 
 	common.Logger.Debugf("retrieving [%s] from AWS Secrets Manager", adjustedSecretName)
-	result, err := c.secretsManagerClient.GetSecretValue(c.ctx, input)
+	result, err := c.api.GetSecretValue(c.ctx, input)
 
 	if err != nil {
 		var errorMessage string
@@ -191,7 +209,7 @@ func (c *SecretsClient) getSecret(secretName string) (string, string, error) {
 		} else if errors.As(err, &notFound) {
 			errorMessage = fmt.Sprintf("secret{%s}: %s %s", adjustedSecretName, notFound.ErrorCode(), notFound.ErrorMessage())
 		} else {
-			errorMessage = fmt.Sprintf("secret{%s[%s]}: %v", adjustedSecretName, err)
+			errorMessage = fmt.Sprintf("secret{%s}: %v", adjustedSecretName, err)
 		}
 		return adjustedSecretName, "", errors.New(errorMessage)
 	}
@@ -213,7 +231,7 @@ func (c *SecretsClient) GetTextSecret(secretName string) (string, error) {
 		}
 	}
 
-	_, secretString, err := c.getSecret(secretName)
+	_, secretString, err := c.GetSecret(secretName)
 	if err != nil {
 		return "", err
 	}
@@ -232,7 +250,7 @@ func (c *SecretsClient) GetJSONSecret(secretName, secretKey string) (string, err
 		}
 	}
 
-	adjustedSecretName, secretString, err := c.getSecret(secretName)
+	adjustedSecretName, secretString, err := c.GetSecret(secretName)
 	if err != nil {
 		return "", err
 	}
