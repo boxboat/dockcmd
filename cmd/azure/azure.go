@@ -1,4 +1,4 @@
-// Copyright © 2022 BoxBoat engineering@boxboat.com
+// Copyright © 2024 BoxBoat
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,11 +32,17 @@ const (
 	keyVaultResource    = "https://" + azurePublicKeyVault
 )
 
+type KeyVaultGetSecretAPI interface {
+	GetSecret(ctx context.Context, vaultBaseURL string, secretName string, secretVersion string) (result keyvault.SecretBundle, err error)
+}
+
 type SecretsClient struct {
 	common.SecretClient
 	keyVaultName string
 	keyVault     keyvault.BaseClient
 	SecretCache  *cache.Cache
+	ctx          context.Context
+	api          KeyVaultGetSecretAPI
 }
 
 type SecretsClientOpt interface {
@@ -44,12 +50,14 @@ type SecretsClientOpt interface {
 }
 
 type secretsClientOpts struct {
+	ctx           context.Context
 	clientID      string
 	clientSecret  string
 	tenantID      string
 	keyVaultName  string
 	useAzCliLogin bool
 	cacheTTL      time.Duration
+	api           *KeyVaultGetSecretAPI
 }
 
 type secretsClientOptFn func(opts *secretsClientOpts) error
@@ -90,6 +98,20 @@ func UseAzCliLogin() SecretsClientOpt {
 	})
 }
 
+func WithContext(ctx context.Context) SecretsClientOpt {
+	return secretsClientOptFn(func(opts *secretsClientOpts) error {
+		opts.ctx = ctx
+		return nil
+	})
+}
+
+func WithMockClient(api KeyVaultGetSecretAPI) SecretsClientOpt {
+	return secretsClientOptFn(func(opts *secretsClientOpts) error {
+		opts.api = &api
+		return nil
+	})
+}
+
 func (opt secretsClientOptFn) configureSecretsClient(opts *secretsClientOpts) error {
 	return opt(opts)
 }
@@ -104,26 +126,36 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 		}
 	}
 
+	if o.ctx == nil {
+		o.ctx = context.Background()
+	}
+
 	client := &SecretsClient{
 		SecretCache:  cache.New(o.cacheTTL, o.cacheTTL),
 		keyVaultName: o.keyVaultName,
+		ctx:          o.ctx,
 	}
-	if o.useAzCliLogin {
-		client.keyVault = keyvault.New()
-		authorizer, err := auth.NewAuthorizerFromCLIWithResource(keyVaultResource)
-		if err != nil {
-			return nil, err
+	if o.api == nil {
+		if o.useAzCliLogin {
+			client.keyVault = keyvault.New()
+			authorizer, err := auth.NewAuthorizerFromCLIWithResource(keyVaultResource)
+			if err != nil {
+				return nil, err
+			}
+			client.keyVault.Authorizer = authorizer
+		} else {
+			client.keyVault = keyvault.New()
+			clientConfig := auth.NewClientCredentialsConfig(o.clientID, o.clientSecret, o.tenantID)
+			clientConfig.Resource = keyVaultResource
+			authorizer, err := clientConfig.Authorizer()
+			if err != nil {
+				return nil, err
+			}
+			client.keyVault.Authorizer = authorizer
 		}
-		client.keyVault.Authorizer = authorizer
+		client.api = client.keyVault
 	} else {
-		client.keyVault = keyvault.New()
-		clientConfig := auth.NewClientCredentialsConfig(o.clientID, o.clientSecret, o.tenantID)
-		clientConfig.Resource = keyVaultResource
-		authorizer, err := clientConfig.Authorizer()
-		if err != nil {
-			return nil, err
-		}
-		client.keyVault.Authorizer = authorizer
+		client.api = *o.api
 	}
 	return client, nil
 }
@@ -151,8 +183,8 @@ func (c *SecretsClient) GetJSONSecret(secretName string, secretKey string) (stri
 
 	common.Logger.Debugf("retrieving [%s][%s] from Azure Key Vault", adjustedSecretName, secretKey)
 
-	secretResp, err := c.keyVault.GetSecret(
-		context.Background(),
+	secretResp, err := c.api.GetSecret(
+		c.ctx,
 		"https://"+c.keyVaultName+".vault.azure.net",
 		adjustedSecretName,
 		version)
@@ -200,8 +232,8 @@ func (c *SecretsClient) GetTextSecret(secretName string) (string, error) {
 
 	common.Logger.Debugf("retrieving [%s] from Azure Key Vault", adjustedSecretName)
 
-	secretResp, err := c.keyVault.GetSecret(
-		context.Background(),
+	secretResp, err := c.api.GetSecret(
+		c.ctx,
 		"https://"+c.keyVaultName+"."+azurePublicKeyVault,
 		adjustedSecretName,
 		version)

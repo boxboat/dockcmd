@@ -31,10 +31,16 @@ const (
 	RoleAuth  = "vaultRole"
 )
 
+type GetSecretAPI interface {
+	ReadWithData(path string, data map[string][]string) (*api.Secret, error)
+	Read(path string) (*api.Secret, error)
+}
+
 type SecretsClient struct {
 	common.SecretClient
 	secretCache *cache.Cache
 	vaultClient *api.Client
+	api         GetSecretAPI
 }
 
 type SecretsClientOpt interface {
@@ -48,6 +54,7 @@ type secretsClientOpts struct {
 	token    string
 	roleID   string
 	secretID string
+	api      *GetSecretAPI
 }
 
 type secretClientOptFn func(opts *secretsClientOpts) error
@@ -92,6 +99,13 @@ func RoleAndSecretID(roleID, secretID string) SecretsClientOpt {
 	})
 }
 
+func WithMockClient(api GetSecretAPI) SecretsClientOpt {
+	return secretClientOptFn(func(opts *secretsClientOpts) error {
+		opts.api = &api
+		return nil
+	})
+}
+
 func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 	var o secretsClientOpts
 	for _, opt := range opts {
@@ -105,36 +119,41 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 		secretCache: cache.New(o.cacheTTL, o.cacheTTL),
 	}
 
-	config := api.DefaultConfig()
-	config.Address = o.address
-	vaultClient, err := api.NewClient(config)
-	if err != nil {
-		return nil, err
-	}
-
-	if o.authType == RoleAuth {
-		common.Logger.Debugf(
-			"getting vault-token using vault-role-id {%s} and vault-secret-id {%s}",
-			o.roleID,
-			o.secretID)
-		appRoleLogin := map[string]interface{}{
-			"role_id":   o.roleID,
-			"secret_id": o.secretID,
-		}
-		resp, err := vaultClient.Logical().Write("auth/approle/login", appRoleLogin)
+	if o.api == nil {
+		config := api.DefaultConfig()
+		config.Address = o.address
+		vaultClient, err := api.NewClient(config)
 		if err != nil {
 			return nil, err
 		}
-		if resp.Auth == nil {
-			return nil, errors.New("failed to obtain VAULT_TOKEN using vault-role-id and vault-secret-id")
+
+		if o.authType == RoleAuth {
+			common.Logger.Debugf(
+				"getting vault-token using vault-role-id {%s} and vault-secret-id {%s}",
+				o.roleID,
+				o.secretID)
+			appRoleLogin := map[string]interface{}{
+				"role_id":   o.roleID,
+				"secret_id": o.secretID,
+			}
+			resp, err := vaultClient.Logical().Write("auth/approle/login", appRoleLogin)
+			if err != nil {
+				return nil, err
+			}
+			if resp.Auth == nil {
+				return nil, errors.New("failed to obtain VAULT_TOKEN using vault-role-id and vault-secret-id")
+			}
+			common.Logger.Debugf("using vault-token {%s}", resp.Auth.ClientToken)
+			vaultClient.SetToken(resp.Auth.ClientToken)
+		} else {
+			common.Logger.Debugf("using specified vault-token {%s}", o.token)
+			vaultClient.SetToken(o.token)
 		}
-		common.Logger.Debugf("using vault-token {%s}", resp.Auth.ClientToken)
-		vaultClient.SetToken(resp.Auth.ClientToken)
+		client.vaultClient = vaultClient
+		client.api = vaultClient.Logical()
 	} else {
-		common.Logger.Debugf("using specified vault-token {%s}", o.token)
-		vaultClient.SetToken(o.token)
+		client.api = *o.api
 	}
-	client.vaultClient = vaultClient
 	return client, nil
 }
 
@@ -170,14 +189,14 @@ func (c *SecretsClient) GetJSONSecret(path string, key string) (string, error) {
 		return "", err
 	}
 	if v2 {
-		queryPath := addPrefixToVKVPath(secretPath, mountPath, "data")
+		queryPath := addPrefixToKVPath(secretPath, mountPath, "data", false)
 		// make empty query for ReadWithData
 		query := url.Values{}
 		if version != "" {
 			query.Add("version", version)
 		}
 
-		secret, err := c.vaultClient.Logical().ReadWithData(queryPath, query)
+		secret, err := c.api.ReadWithData(queryPath, query)
 		if err != nil {
 			return "", err
 		}
@@ -191,7 +210,7 @@ func (c *SecretsClient) GetJSONSecret(path string, key string) (string, error) {
 		}
 		_ = c.secretCache.Add(path, secret.Data["data"].(map[string]interface{}), cache.DefaultExpiration)
 	} else {
-		secret, err := c.vaultClient.Logical().Read(secretPath)
+		secret, err := c.api.Read(secretPath)
 		if err != nil {
 			return "", err
 		}
