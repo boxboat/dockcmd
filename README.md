@@ -26,7 +26,11 @@ See `dockcmd aws --help` for more details on `aws` flags.
 
 Retrieve secrets stored as JSON from AWS Secrets Manager. Input files are defined using go templating and `dockcmd` supports sprig functions, `urlEncode`, `urlDecode`, and the Helm `toYaml` function, as well as alternate template delimiters `<< >>` using `--use-alt-delims`. External values can be passed in using `--set key=value` or with `--values values.yaml`.
 
-Note the `aws(secretName,secretKey)` function is now aliased to `awsJson(secretName, secretKey)`. `aws` will not be removed.
+
+Notes:
+ - the `aws(secretName,secretKey)` function is now aliased to `awsJson(secretName, secretKey)`. `aws` will not be removed.
+ - `secretName` can be the Secret ARN - necessary in the case of across account retrieval 
+
 
 `dockcmd aws get-secrets --region us-east-1 --set TargetEnv=prod --input-file secret-values.yaml`
 
