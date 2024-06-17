@@ -1,6 +1,7 @@
 module github.com/boxboat/dockcmd
 
 go 1.22
+toolchain go1.22.4
 
 require (
 	cloud.google.com/go/secretmanager v1.13.0
@@ -21,12 +22,11 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	google.golang.org/api v0.180.0
-	helm.sh/helm/v3 v3.14.4
+	helm.sh/helm/v3 v3.15.2
 	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
-	cloud.google.com/go v0.112.2 // indirect
 	cloud.google.com/go/auth v0.4.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.2 // indirect
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
