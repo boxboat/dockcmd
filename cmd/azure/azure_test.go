@@ -21,14 +21,14 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/keyvault/keyvault"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/boxboat/dockcmd/cmd/common"
 )
 
-type mockGetSecretValueAPI func(ctx context.Context, vaultBaseURL string, secretName string, secretVersion string) (result keyvault.SecretBundle, err error)
+type mockGetSecretValueAPI func(ctx context.Context, name string, version string, options *azsecrets.GetSecretOptions) (azsecrets.GetSecretResponse, error)
 
-func (m mockGetSecretValueAPI) GetSecret(ctx context.Context, vaultBaseURL string, secretName string, secretVersion string) (result keyvault.SecretBundle, err error) {
-	return m(ctx, vaultBaseURL, secretName, secretVersion)
+func (m mockGetSecretValueAPI) GetSecret(ctx context.Context, name string, version string, options *azsecrets.GetSecretOptions) (azsecrets.GetSecretResponse, error) {
+	return m(ctx, name, version, nil)
 }
 
 func TestSecretsClient_GetTextSecret(t *testing.T) {
@@ -40,17 +40,19 @@ func TestSecretsClient_GetTextSecret(t *testing.T) {
 	}{
 		{
 			client: func(t *testing.T) KeyVaultGetSecretAPI {
-				return mockGetSecretValueAPI(func(ctx context.Context, vaultBaseURL string, secretName string, secretVersion string) (result keyvault.SecretBundle, err error) {
+				return mockGetSecretValueAPI(func(ctx context.Context, name string, version string, options *azsecrets.GetSecretOptions) (azsecrets.GetSecretResponse, error) {
 					t.Helper()
-					if secretName == "" {
+					if name == "" {
 						t.Fatalf("expect secretName to not be empty")
 					}
 					secretString := ""
-					if secretName == "alpha" {
+					if name == "alpha" {
 						secretString = "charlie"
 					}
-					return keyvault.SecretBundle{
-						Value: &secretString,
+					return azsecrets.GetSecretResponse{
+						Secret: azsecrets.Secret{
+							Value: &secretString,
+						},
 					}, nil
 				})
 			},
@@ -93,17 +95,19 @@ func TestSecretsClient_GetJSONSecret(t *testing.T) {
 	}{
 		{
 			client: func(t *testing.T) KeyVaultGetSecretAPI {
-				return mockGetSecretValueAPI(func(ctx context.Context, vaultBaseURL string, secretName string, secretVersion string) (result keyvault.SecretBundle, err error) {
+				return mockGetSecretValueAPI(func(ctx context.Context, name string, version string, options *azsecrets.GetSecretOptions) (azsecrets.GetSecretResponse, error) {
 					t.Helper()
-					if secretName == "" {
+					if name == "" {
 						t.Fatalf("expect secretName to not be empty")
 					}
 					secretString := ""
-					if secretName == "alpha" {
+					if name == "alpha" {
 						secretString = `{"bravo":"foo", "charlie":"bar"}`
 					}
-					return keyvault.SecretBundle{
-						Value: &secretString,
+					return azsecrets.GetSecretResponse{
+						Secret: azsecrets.Secret{
+							Value: &secretString,
+						},
 					}, nil
 				})
 			},

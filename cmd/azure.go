@@ -24,12 +24,12 @@ import (
 )
 
 var (
-	client        *azure.SecretsClient
-	clientID      string
-	clientSecret  string
-	tenantID      string
-	useAzCliLogin bool
-	keyVaultName  string
+	client                     *azure.SecretsClient
+	clientID                   string
+	clientSecret               string
+	tenantID                   string
+	useChainedTokenCredentials bool
+	keyVaultName               string
 )
 
 // azureRegionCmdPersistentPreRunE checks required persistent tokens for azureCmd
@@ -43,9 +43,9 @@ func azureCmdPersistentPreRunE(cmd *cobra.Command, args []string) error {
 	clientID = viper.GetString("client-id")
 	clientSecret = viper.GetString("client-secret")
 
-	if (tenantID == "" && clientID == "" && clientSecret == "") || useAzCliLogin {
+	if (clientID == "" && clientSecret == "") || useChainedTokenCredentials {
 		// set to true in case where no service principal credentials provided
-		useAzCliLogin = true
+		useChainedTokenCredentials = true
 	}
 
 	return nil
@@ -101,8 +101,8 @@ keyD: "<value-of-secret/root-from-azure-key-vault>"
 			azure.WithContext(azureCmd.Context()),
 		}
 
-		if useAzCliLogin {
-			opts = append(opts, azure.UseAzCliLogin())
+		if useChainedTokenCredentials {
+			opts = append(opts, azure.UseChainCredentials(), azure.TenantID(tenantID))
 		} else {
 			opts = append(opts, azure.ClientIDAndSecret(clientID, clientSecret), azure.TenantID(tenantID))
 		}
@@ -139,7 +139,7 @@ func init() {
 	// azure command and common persistent flags
 	azureCmd.AddCommand(azureGetSecretsCmd)
 	azureCmd.PersistentFlags().BoolVarP(
-		&useAzCliLogin, "az-cli-login",
+		&useChainedTokenCredentials, "az-cli-login",
 		"",
 		false,
 		"access credentials provided by az login - default if tenant, client-id and client-secret are not set")
