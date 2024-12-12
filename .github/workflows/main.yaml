@@ -126,7 +126,6 @@ jobs:
 
       - name: Attest ghcr image
         uses: actions/attest-build-provenance@v2
-        id: attest
         with:
           subject-name: ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -134,7 +133,6 @@ jobs:
 
       - name: Attest hub image
         uses: actions/attest-build-provenance@v2
-        id: attest
         with:
           subject-name: boxboat/dockcmd:${{ env.CI_VERSION }}
           subject-digest: ${{ steps.push.outputs.digest }}
