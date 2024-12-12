@@ -4,6 +4,11 @@ jobs:
   build:
     name: Build
     runs-on: "ubuntu-latest"
+    permissions:
+      id-token: write
+      packages: write
+      contents: read
+      attestations: write
     steps:
 
       - name: Checkout
@@ -68,6 +73,10 @@ jobs:
             make
           fi
 
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'release/**/dockcmd*'
+
       - name: Release Artifacts
         if: ${{ env.RELEASE == 'yes' }}
         run: |
@@ -103,6 +112,7 @@ jobs:
 
       - name: Build and push
         if: ${{ env.PUBLISH == 'yes' }}
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -113,3 +123,19 @@ jobs:
           tags: |
             boxboat/dockcmd:${{ env.CI_VERSION }}
             ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
+
+      - name: Attest ghcr image
+        uses: actions/attest-build-provenance@v2
+        id: attest
+        with:
+          subject-name: ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest hub image
+        uses: actions/attest-build-provenance@v2
+        id: attest
+        with:
+          subject-name: boxboat/dockcmd:${{ env.CI_VERSION }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
