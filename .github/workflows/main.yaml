@@ -132,11 +132,3 @@ jobs:
           subject-name: ghcr.io/boxboat/dockcmd
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-
-      - name: Attest hub image
-        if: ${{ env.PUBLISH == 'yes' }}
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-name: boxboat/dockcmd
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
