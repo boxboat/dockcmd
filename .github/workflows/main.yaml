@@ -74,6 +74,7 @@ jobs:
           fi
 
       - uses: actions/attest-build-provenance@v2
+        if: ${{ env.PUBLISH == 'yes' }}
         with:
           subject-path: 'release/**/dockcmd*'
 
@@ -125,6 +126,7 @@ jobs:
             ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
 
       - name: Attest ghcr image
+        if: ${{ env.PUBLISH == 'yes' }}
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
@@ -132,6 +134,7 @@ jobs:
           push-to-registry: true
 
       - name: Attest hub image
+        if: ${{ env.PUBLISH == 'yes' }}
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: boxboat/dockcmd:${{ env.CI_VERSION }}
