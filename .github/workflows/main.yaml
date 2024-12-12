@@ -137,6 +137,6 @@ jobs:
         if: ${{ env.PUBLISH == 'yes' }}
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/boxboat/dockcmd
+          subject-name: boxboat/dockcmd
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
