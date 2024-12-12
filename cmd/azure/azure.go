@@ -17,29 +17,59 @@ package azure
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/2019-03-01/keyvault/keyvault"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/boxboat/dockcmd/cmd/common"
 	"github.com/patrickmn/go-cache"
 )
 
 const (
-	azurePublicKeyVault = "vault.azure.net"
-	keyVaultResource    = "https://" + azurePublicKeyVault
+	azurePublicKeyVault          = "vault.azure.net"
+	keyVaultResourceFormatString = "https://%s." + azurePublicKeyVault + "/"
 )
 
+type timeoutWrapper struct {
+	cred    *azidentity.ManagedIdentityCredential
+	timeout time.Duration
+}
+
+// GetToken implements the azcore.TokenCredential interface
+func (w *timeoutWrapper) GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	var tk azcore.AccessToken
+	var err error
+	if w.timeout > 0 {
+		c, cancel := context.WithTimeout(ctx, w.timeout)
+		defer cancel()
+		tk, err = w.cred.GetToken(c, opts)
+		if ce := c.Err(); errors.Is(ce, context.DeadlineExceeded) {
+			// The Context reached its deadline, probably because no managed identity is available.
+			// A credential unavailable error signals the chain to try its next credential, if any.
+			err = azidentity.NewCredentialUnavailableError("managed identity timed out")
+		} else {
+			// some managed identity implementation is available, so don't apply the timeout to future calls
+			w.timeout = 0
+		}
+	} else {
+		tk, err = w.cred.GetToken(ctx, opts)
+	}
+	return tk, err
+}
+
 type KeyVaultGetSecretAPI interface {
-	GetSecret(ctx context.Context, vaultBaseURL string, secretName string, secretVersion string) (result keyvault.SecretBundle, err error)
+	GetSecret(ctx context.Context, name string, version string, options *azsecrets.GetSecretOptions) (azsecrets.GetSecretResponse, error)
 }
 
 type SecretsClient struct {
 	common.SecretClient
 	keyVaultName string
-	keyVault     keyvault.BaseClient
+	keyVault     *azsecrets.Client
 	SecretCache  *cache.Cache
 	ctx          context.Context
 	api          KeyVaultGetSecretAPI
@@ -50,14 +80,14 @@ type SecretsClientOpt interface {
 }
 
 type secretsClientOpts struct {
-	ctx           context.Context
-	clientID      string
-	clientSecret  string
-	tenantID      string
-	keyVaultName  string
-	useAzCliLogin bool
-	cacheTTL      time.Duration
-	api           *KeyVaultGetSecretAPI
+	ctx                 context.Context
+	clientID            string
+	clientSecret        string
+	tenantID            string
+	keyVaultName        string
+	useChainCredentials bool
+	cacheTTL            time.Duration
+	api                 *KeyVaultGetSecretAPI
 }
 
 type secretsClientOptFn func(opts *secretsClientOpts) error
@@ -91,9 +121,9 @@ func TenantID(tenantID string) SecretsClientOpt {
 	})
 }
 
-func UseAzCliLogin() SecretsClientOpt {
+func UseChainCredentials() SecretsClientOpt {
 	return secretsClientOptFn(func(opts *secretsClientOpts) error {
-		opts.useAzCliLogin = true
+		opts.useChainCredentials = true
 		return nil
 	})
 }
@@ -136,22 +166,36 @@ func NewSecretsClient(opts ...SecretsClientOpt) (*SecretsClient, error) {
 		ctx:          o.ctx,
 	}
 	if o.api == nil {
-		if o.useAzCliLogin {
-			client.keyVault = keyvault.New()
-			authorizer, err := auth.NewAuthorizerFromCLIWithResource(keyVaultResource)
+		if o.useChainCredentials {
+			common.Logger.Debugf("using chain credentials")
+
+			managed, err := azidentity.NewManagedIdentityCredential(nil)
 			if err != nil {
 				return nil, err
 			}
-			client.keyVault.Authorizer = authorizer
+
+			azCli, err := azidentity.NewAzureCLICredential(&azidentity.AzureCLICredentialOptions{AdditionallyAllowedTenants: []string{o.tenantID}})
+			if err != nil {
+				return nil, err
+			}
+
+			chain, err := azidentity.NewChainedTokenCredential([]azcore.TokenCredential{&timeoutWrapper{managed, time.Second}, azCli}, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			azSecretsClient, err := azsecrets.NewClient(fmt.Sprintf(keyVaultResourceFormatString, client.keyVaultName), chain, nil)
+			client.keyVault = azSecretsClient
+
 		} else {
-			client.keyVault = keyvault.New()
-			clientConfig := auth.NewClientCredentialsConfig(o.clientID, o.clientSecret, o.tenantID)
-			clientConfig.Resource = keyVaultResource
-			authorizer, err := clientConfig.Authorizer()
+
+			cred, err := azidentity.NewClientSecretCredential(o.tenantID, o.clientID, o.clientSecret, nil)
 			if err != nil {
 				return nil, err
 			}
-			client.keyVault.Authorizer = authorizer
+			azSecretsClient, err := azsecrets.NewClient(fmt.Sprintf(keyVaultResourceFormatString, client.keyVaultName), cred, nil)
+			client.keyVault = azSecretsClient
+
 		}
 		client.api = client.keyVault
 	} else {
@@ -185,9 +229,9 @@ func (c *SecretsClient) GetJSONSecret(secretName string, secretKey string) (stri
 
 	secretResp, err := c.api.GetSecret(
 		c.ctx,
-		"https://"+c.keyVaultName+".vault.azure.net",
 		adjustedSecretName,
-		version)
+		version,
+		nil)
 	if err != nil {
 		return "", err
 	}
@@ -234,9 +278,9 @@ func (c *SecretsClient) GetTextSecret(secretName string) (string, error) {
 
 	secretResp, err := c.api.GetSecret(
 		c.ctx,
-		"https://"+c.keyVaultName+"."+azurePublicKeyVault,
 		adjustedSecretName,
-		version)
+		version,
+		nil)
 	if err != nil {
 		return "", err
 	}

@@ -4,6 +4,11 @@ jobs:
   build:
     name: Build
     runs-on: "ubuntu-latest"
+    permissions:
+      id-token: write
+      packages: write
+      contents: read
+      attestations: write
     steps:
 
       - name: Checkout
@@ -12,7 +17,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.23.x'
           check-latest: true
 
       - name: Print Go Version
@@ -68,6 +73,11 @@ jobs:
             make
           fi
 
+      - uses: actions/attest-build-provenance@v2
+        if: ${{ env.PUBLISH == 'yes' }}
+        with:
+          subject-path: 'release/**/dockcmd*'
+
       - name: Release Artifacts
         if: ${{ env.RELEASE == 'yes' }}
         run: |
@@ -103,7 +113,8 @@ jobs:
 
       - name: Build and push
         if: ${{ env.PUBLISH == 'yes' }}
-        uses: docker/build-push-action@v4
+        id: push
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -113,3 +124,19 @@ jobs:
           tags: |
             boxboat/dockcmd:${{ env.CI_VERSION }}
             ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
+
+      - name: Attest ghcr image
+        if: ${{ env.PUBLISH == 'yes' }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest hub image
+        if: ${{ env.PUBLISH == 'yes' }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: boxboat/dockcmd:${{ env.CI_VERSION }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
