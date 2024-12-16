@@ -22,7 +22,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	google.golang.org/api v0.211.0
-	helm.sh/helm/v3 v3.16.3
+	helm.sh/helm/v3 v3.16.4
 	sigs.k8s.io/yaml v1.4.0
 )
 
