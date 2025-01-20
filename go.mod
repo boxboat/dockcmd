@@ -1,7 +1,6 @@
 module github.com/boxboat/dockcmd
 
 go 1.23
-
 require (
 	cloud.google.com/go/secretmanager v1.14.2
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
@@ -22,7 +21,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	google.golang.org/api v0.211.0
-	helm.sh/helm/v3 v3.16.3
+	helm.sh/helm/v3 v3.17.0
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -95,7 +94,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
