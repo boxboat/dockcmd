@@ -1,6 +1,6 @@
 module github.com/boxboat/dockcmd
 
-go 1.23
+go 1.23.0
 
 require (
 	cloud.google.com/go/secretmanager v1.14.2
@@ -96,7 +96,7 @@ require (
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
 	golang.org/x/net v0.32.0 // indirect
-	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
