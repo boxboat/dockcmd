@@ -73,7 +73,7 @@ jobs:
             make
           fi
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v3
         if: ${{ env.PUBLISH == 'yes' }}
         with:
           subject-path: 'release/**/dockcmd*'
@@ -119,7 +119,7 @@ jobs:
 
       - name: Attest ghcr image
         if: ${{ env.PUBLISH == 'yes' }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-name: ghcr.io/boxboat/dockcmd
           subject-digest: ${{ steps.push.outputs.digest }}
