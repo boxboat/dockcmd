@@ -128,7 +128,7 @@ func GetSecrets(files []string, funcMap template.FuncMap) error {
 	var err error
 
 	if len(files) > 0 {
-		Logger.Debugf("Processing files: " + strings.Join(files, ","))
+		Logger.Debugf("Processing files: %s", strings.Join(files, ","))
 		for _, file := range files {
 			data, err = ReadFileOrStdin(file)
 			if err != nil {
