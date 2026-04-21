@@ -3,7 +3,7 @@
 
 `dockcmd` is a tool providing a collection of [BoxOps](https://boxops.io) utility functions. Which can be used standalone or to accelerate CI/CD with BoxBoat's [dockhand](https://github.com/boxboat/dockhand).
 
-[dockhand-secrets-operator](https://github.com/boxboat/dockhand-secrets-operator) leverages this project to facilitate secrets management within Kubernetes. 
+[dockhand-secrets-operator](https://github.com/boxboat/dockhand-secrets-operator) leverages this project to facilitate secrets management within Kubernetes.
 
 
 ***
@@ -17,7 +17,7 @@ AWS utilities are under the `aws` sub-command. For authentication, AWS commands 
   * Args: `--access-key-id <access-key>` `--secret-access-key <secret-key>`
 * AWS Profile: `~/.aws/config` and `~/.aws/credentials`
   * Environment: `${AWS_PROFILE}`
-  * Args: `--profile <profile-name>`  
+  * Args: `--profile <profile-name>`
 * EC2 Instance Profile
 
 See `dockcmd aws --help` for more details on `aws` flags.
@@ -29,7 +29,7 @@ Retrieve secrets stored as JSON from AWS Secrets Manager. Input files are define
 
 Notes:
  - the `aws(secretName,secretKey)` function is now aliased to `awsJson(secretName, secretKey)`. `aws` will not be removed.
- - `secretName` can be the Secret ARN - necessary in the case of across account retrieval 
+ - `secretName` can be the Secret ARN - necessary in the case of across account retrieval
 
 
 `dockcmd aws get-secrets --region us-east-1 --set TargetEnv=prod --input-file secret-values.yaml`

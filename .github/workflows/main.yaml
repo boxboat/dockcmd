@@ -10,19 +10,15 @@ jobs:
       contents: write
       attestations: write
     steps:
-
       - name: Checkout
         uses: actions/checkout@v6
-
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.24.x'
           check-latest: true
-
       - name: Print Go Version
         run: go version
-
       - name: Compute Version
         id: version
         run: |
@@ -60,11 +56,9 @@ jobs:
             echo PUBLISH=${publish} >> $GITHUB_ENV
             echo RELEASE=${release} >> $GITHUB_ENV
           fi
-
       - name: Test
         run: |
           make test
-
       - name: Build
         run: |
           if [[ ${PUBLISH} = "yes" ]]; then
@@ -72,12 +66,10 @@ jobs:
           else
             make
           fi
-
       - uses: actions/attest-build-provenance@v2
         if: ${{ env.PUBLISH == 'yes' }}
         with:
           subject-path: 'release/**/dockcmd*'
-
       - name: Release Artifacts
         if: ${{ env.RELEASE == 'yes' }}
         run: |
@@ -85,17 +77,14 @@ jobs:
           gh release upload ${CI_VERSION} ./release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Set up QEMU
         if: ${{ env.PUBLISH == 'yes' }}
         uses: docker/setup-qemu-action@v3
-
       - name: Set up Buildx
         if: ${{ env.PUBLISH == 'yes' }}
         uses: docker/setup-buildx-action@v3
         with:
           buildkitd-flags: --debug
-
       - name: Login to GitHub Container Registry
         if: ${{ env.PUBLISH == 'yes' }}
         uses: docker/login-action@v3
@@ -103,7 +92,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and push
         if: ${{ env.PUBLISH == 'yes' }}
         id: push
@@ -116,7 +104,6 @@ jobs:
             VERSION=${{ env.CI_VERSION }}
           tags: |
             ghcr.io/boxboat/dockcmd:${{ env.CI_VERSION }}
-
       - name: Attest ghcr image
         if: ${{ env.PUBLISH == 'yes' }}
         uses: actions/attest-build-provenance@v2
