@@ -17,6 +17,7 @@ package elastic
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/boxboat/dockcmd/cmd/common"
 	elasticsearch6 "github.com/elastic/go-elasticsearch/v6"
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
