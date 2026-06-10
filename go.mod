@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.24
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.23
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.42.1
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.42.3
 	github.com/elastic/go-elasticsearch/v6 v6.8.10
 	github.com/elastic/go-elasticsearch/v7 v7.17.10
 	github.com/googleapis/gax-go/v2 v2.21.0
